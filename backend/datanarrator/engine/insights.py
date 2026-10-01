@@ -11,14 +11,16 @@ import math
 import re
 
 from ..db import fetch_dicts, q
-from .fmt import num, pct
+from . import narrate
+from .fmt import money_or_num, noun_for, num, pct, plural
 from .profile import MEASURE_HINT, by_role
 
 RECORDS = {"name": "Records", "agg": "count"}
 _FLAG_VALUES = {"true", "false", "yes", "no", "y", "n", "0", "1", "(blank)"}
 MAX_MEASURES, MAX_DIMS, MAX_ENTITIES = 4, 8, 2
 # Money columns lead KPIs, rankings and reports.
-MONEY = re.compile(r"revenue|sales|amount|amt|value|turnover|gmv|income|profit", re.I)
+MONEY = re.compile(r"revenue|sales|amount|amt|value|turnover|gmv|income|profit|total", re.I)
+PAID_LIKE = re.compile(r"paid|received|collected|settled", re.I)
 
 
 # ---------------------------------------------------------------- selection
@@ -29,16 +31,28 @@ def agg_sql(m: dict) -> str:
     return f"{'avg' if m['agg'] == 'avg' else 'sum'}({q(m['name'])})"
 
 
+def _money_rank(name: str) -> int:
+    """Totals first, then other money, then paid/received (they follow the totals)."""
+    if PAID_LIKE.search(name):
+        return 3
+    if re.search(r"total|revenue|sales|turnover|gmv", name, re.I):
+        return 0
+    if MONEY.search(name):
+        return 1
+    return 2
+
+
 def pick_measures(prof) -> list[dict]:
     ms = by_role(prof, "measure")
-    ms.sort(key=lambda c: (not MONEY.search(c["name"]), not MEASURE_HINT.search(c["name"]), c["agg"] != "sum",
-                           c["null_pct"]))
+    ms.sort(key=lambda c: (_money_rank(c["name"]), not MEASURE_HINT.search(c["name"]), c["agg"] != "sum", c["null_pct"]))
     return ms[:MAX_MEASURES]
 
 
 def pick_dims(prof) -> list[dict]:
-    ds = [c for c in by_role(prof, "dimension") if 2 <= c["unique"] <= 60]
-    ds.sort(key=lambda c: (c["subtype"] == "code", not (3 <= c["unique"] <= 20), c["subtype"] != "geo", c["null_pct"]))
+    ds = [c for c in by_role(prof, "dimension") if 2 <= c["unique"] <= 60 and c["subtype"] != "status"]
+    code_like = re.compile(r"(^|[\s_])(id|sku|code|no|number)$", re.I)  # names read better than codes
+    ds.sort(key=lambda c: (c["subtype"] == "code", bool(code_like.search(c["name"])), not (3 <= c["unique"] <= 20),
+                           c["subtype"] != "geo", c["null_pct"]))
     return ds[:MAX_DIMS]
 
 
@@ -80,6 +94,7 @@ def _grain(con, rel, texpr) -> str | None:
 
 def _insight(kind, key, title, summary, details, score, chart=None, **facts) -> dict:
     return {"id": f"{kind}:{key}", "type": kind, "title": title, "summary": summary,
+            "details": [d for d in details if d],
             "narrative": " ".join([summary, *[d for d in details if d]]).strip(),
             "score": round(max(0.0, min(score, 1.0)), 3), "chart": chart, "facts": facts}
 
@@ -114,6 +129,7 @@ def breakdowns(con, rel, measures, dims) -> list[dict]:
             if k < 2:
                 continue
             mname = m["name"]
+            num = lambda v, _m=mname: money_or_num(v, _m)  # noqa: E731 - rupees for money columns
             (top, tv), (sec, sv), (bot, bv) = items[0], items[1], items[-1]
             details, negatives, conc, share = [], [], 0.0, None
             if m["agg"] == "avg":
@@ -198,6 +214,7 @@ def trends(con, rel, measures, tcol) -> tuple[list[dict], dict, str | None]:
         step = (lv - prev) / abs(prev) if prev else None
         latest[m["name"]] = {"value": lv, "delta": step, "period": _label(lp, grain)}
         mname, span = m["name"], f"{k} {grain}{'s' if k > 1 else ''}"
+        num = lambda v, _m=mname: money_or_num(v, _m)  # noqa: E731
         score_change = 0.0
         if m["agg"] == "count" and (change is None or abs(change) < 0.05):
             continue
@@ -210,10 +227,14 @@ def trends(con, rel, measures, tcol) -> tuple[list[dict], dict, str | None]:
         elif change is None:
             summary = f"{mname} over time, by {grain}."
         elif abs(change) < 0.05:
-            summary = f"{mname} has been roughly flat: the last {span} average {num(last)} vs {num(first)} at the start."
+            summary = f"{mname} has stayed about the same: {num(last)} a {grain} recently, {num(first)} at the start."
+        elif k == 1:
+            word = "higher" if change > 0 else "lower"
+            summary = f"{mname} in {_label(pts[-1][0], grain)} was {pct(abs(change))} {word} than in {_label(pts[0][0], grain)}."
         else:
-            word = "grew" if change > 0 else "fell"
-            summary = f"{mname} {word} {pct(abs(change))}, comparing the last {span} with the first {span}."
+            word = "up" if change > 0 else "down"
+            summary = (f"{mname} is {word} {pct(abs(change))}: the last {span} averaged {num(last)} a {grain},"
+                       f" against {num(first)} in the first {span}.")
         details = [f"Peak was {_label(pp, grain)} ({num(pv)}); lowest was {_label(tp, grain)} ({num(tv)})."]
         if step is not None:
             details.append(f"Latest {grain}, {_label(lp, grain)}: {num(lv)} ({'+' if step >= 0 else '−'}"
@@ -250,7 +271,8 @@ def top_entities(con, rel, measure, entities) -> list[dict]:
         share = top20 / tot
         n20 = math.ceil(cnt * 0.2)
         mname, ename = measure["name"], e["name"]
-        summary = f"The top 20% of {ename} ({n20:,} of {cnt:,}) account for {pct(share)} of {mname}."
+        num = lambda v, _m=mname: money_or_num(v, _m)  # noqa: E731
+        summary = f"The top {n20:,} {plural(ename)} (20% of {cnt:,}) bring in {pct(share)} of {mname}."
         details = [f"Largest: {rows[0]['l']} ({num(rows[0]['v'])}), then {rows[1]['l']} and {rows[2]['l']}."]
         out.append(_insight(
             "top", f"{mname}|{ename}", f"Top {ename} by {mname}", summary, details,
@@ -319,6 +341,7 @@ def outliers(con, rel, prof, measures) -> list[dict]:
         rows = con.execute(f"SELECT {lbl}, {mq} FROM {rel} WHERE {mq} > {hi} OR {mq} < {lo}"
                            f" ORDER BY abs({mq} - {m['q50'] or 0}) DESC LIMIT 8").fetchall()
         side = "high" if n_hi >= n_lo else "low"
+        num = lambda v, _m=m["name"]: money_or_num(v, _m)  # noqa: E731
         summary = f"{n:,} row(s) have unusually {side} {m['name']}."
         details = [f"Half of all values sit between {num(m['q25'])} and {num(m['q75'])};"
                    f" these are beyond {num(hi if side == 'high' else lo)}.",
@@ -332,6 +355,31 @@ def outliers(con, rel, prof, measures) -> list[dict]:
     return out
 
 
+def duplicate_ids(con, rel, prof) -> list[dict]:
+    """An ID that should be unique (invoice number, order ID) but appears more than once."""
+    out = []
+    for c in prof["columns"]:
+        nonnull = prof["sample_rows"] * (1 - c["null_pct"] / 100)
+        if c["role"] != "id" or not nonnull or c["unique"] / nonnull < 0.97:
+            continue
+        col = q(c["name"])
+        rows = con.execute(f"SELECT CAST({col} AS VARCHAR), count(*) n FROM {rel} WHERE {col} IS NOT NULL"
+                           f" GROUP BY 1 HAVING count(*) > 1 ORDER BY n DESC, 1 LIMIT 5").fetchall()
+        if not rows:
+            continue
+        total = con.execute(f"SELECT count(*) FROM (SELECT {col} FROM {rel} WHERE {col} IS NOT NULL"
+                            f" GROUP BY 1 HAVING count(*) > 1)").fetchone()[0]
+        ex = ", ".join(r[0] for r in rows[:3])
+        times = {2: "twice", 3: "three times"}.get(rows[0][1], f"{rows[0][1]} times")
+        text = (f"{c['name']} {rows[0][0]} appears {times}." if total == 1
+                else f"{total:,} {plural(c['name'])} appear more than once, for example {ex}.")
+        out.append(_insight(
+            "quality", f"dupid|{c['name']}", f"Repeated {c['name']}", text,
+            ["Each should be unique, so totals may be counted twice."],
+            0.42, None, column=c["name"], count=total, examples=[r[0] for r in rows]))
+    return out
+
+
 def quality(prof) -> list[dict]:
     out = []
     for c in prof["columns"]:
@@ -341,6 +389,14 @@ def quality(prof) -> list[dict]:
                 f"{c['null_pct']:.0f}% of {c['name']} values are empty.",
                 ["Results that use this column may be incomplete."],
                 0.15 + min(0.25, c["null_pct"] / 400), None, column=c["name"], null_pct=c["null_pct"]))
+    for c in prof["columns"]:
+        n = c.get("null_count")
+        if c["role"] in ("measure", "id", "dimension", "time", "entity") and n and 0 < c["null_pct"] < 5:
+            out.append(_insight(
+                "quality", f"gaps|{c['name']}", f"Missing {c['name']}",
+                f"{n:,} record{'s have' if n > 1 else ' has'} no {c['name']}.",
+                ["Every other record has one, so these were probably skipped by mistake."],
+                0.32, None, column=c["name"], null_count=n))
     if prof.get("duplicate_rows"):
         d = prof["duplicate_rows"]
         out.append(_insight("quality", "duplicates", "Duplicate rows",
@@ -351,7 +407,10 @@ def quality(prof) -> list[dict]:
 
 # ---------------------------------------------------------------- entry point
 
-def generate(con, rel: str, prof: dict) -> dict:
+def generate(con, rel: str, prof: dict, table: str = "") -> dict:
+    global RECORDS
+    noun = noun_for(table)
+    RECORDS = {"name": noun, "agg": "count"}
     measures = pick_measures(prof)
     dims = pick_dims(prof)
     tcol = pick_time(prof)
@@ -369,17 +428,63 @@ def generate(con, rel: str, prof: dict) -> dict:
     insights += top_entities(con, rel, lead, entities)
     insights += correlations(con, rel, measures)
     insights += outliers(con, rel, prof, measures)
-    insights += quality(prof)
+    dup_ids = duplicate_ids(con, rel, prof)
+    insights += dup_ids
+    insights += [i for i in quality(prof) if not (dup_ids and i["id"] == "quality:duplicates")]
     insights.sort(key=lambda i: i["score"], reverse=True)
 
     kpis = []
     for m, v in zip(kpi_ms, vals):
         lt = latest.get(m["name"], {})
-        kpis.append({"label": m["name"], "value": float(v) if v is not None else None, "display": num(v),
+        kpis.append({"label": m["name"], "value": float(v) if v is not None else None, "display": money_or_num(v, m["name"]),
                      "agg": {"count": "Count", "avg": "Average", "sum": "Total"}[m["agg"]],
                      "delta": lt.get("delta"), "period": lt.get("period")})
 
-    headline = " ".join(i["summary"] for i in insights[:3] if i["type"] != "quality")
-    return {"kpis": kpis, "insights": insights, "headline": headline, "grain": grain,
-            "time_column": tcol["name"] if tcol else None,
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+    result = {"kpis": kpis, "insights": insights, "grain": grain, "time_column": tcol["name"] if tcol else None,
+              "generated_at": dt.datetime.now(dt.timezone.utc).isoformat()}
+    story = narrate.build(con, rel, prof, table, result, measures, dims, tcol)
+    insights += _story_insights(story["facts"])
+    insights.sort(key=lambda i: i["score"], reverse=True)
+    result.update({"story": story, "about": story["facts"]["about"], "headline": story["lead"],
+                   "month_to_date": story["facts"]["month_to_date"]})
+    return result
+
+
+def _story_insights(f: dict) -> list[dict]:
+    """Money to collect and biggest movers, as insights of their own."""
+    out = []
+    r = f.get("receivables")
+    if r:
+        summary = f"{money_or_num(r['open_total'], 'amount')} is still to be collected"
+        details = []
+        if r.get("overdue_total"):
+            summary += f"; {money_or_num(r['overdue_total'], 'amount')} is overdue."
+            details.append(f"That is {r['overdue_count']:,} records past their due date.")
+        else:
+            summary += "."
+        if r["top"]:
+            details.append("Largest: " + ", ".join(f"{t['label']} ({money_or_num(t['value'], 'amount')})" for t in r["top"][:3]) + ".")
+        chart = {"kind": "bar", "x": "Overdue by", "y": r["money"], "data": [{"label": b["label"], "value": b["value"]} for b in r["buckets"]]} \
+            if r.get("buckets") else {"kind": "bar", "x": r["party"] or "", "y": r["money"], "data": r["top"]}
+        out.append(_insight("collect", r["money"], "Money to collect", summary, details, 0.9, chart,
+                            measure=r["money"], open_total=r["open_total"], overdue_total=r.get("overdue_total"),
+                            overdue_count=r.get("overdue_count"), top=r["top"], party=r["party"]))
+    for mv in f.get("movers") or []:
+        g, c, b, ch = mv["down"]
+        gu, cu, bu, chu = mv["up"]
+        if ch > -0.1 and chu < 0.1:
+            continue
+        down_leads = abs(ch) >= chu
+        name, cur, base, change = (g, c, b, ch) if down_leads else (gu, cu, bu, chu)
+        summary = (f"{name} brought in {money_or_num(cur, mv['measure'])} in {mv['month']}, {pct(abs(change))}"
+                   f" {'below' if change < 0 else 'above'} the usual {money_or_num(base, mv['measure'])} a month.")
+        other = (gu, chu) if down_leads else (g, ch)
+        details = [f"That is the biggest {'drop' if change < 0 else 'rise'} of any {mv['dimension']}."]
+        if abs(other[1]) > 0.08:
+            details.append(f"{other[0]} is {pct(abs(other[1]))} {'above' if other[1] > 0 else 'below'} the usual level.")
+        out.append(_insight("mover", f"{mv['dimension']}|{mv['measure']}", f"Biggest change by {mv['dimension']}", summary, details,
+                            0.5 + min(0.35, abs(change) * 0.7),
+                            {"kind": "bar", "x": mv["dimension"], "y": "% vs usual", "data": [
+                                {"label": g, "value": round(ch * 100, 1)}, {"label": gu, "value": round(chu * 100, 1)}]},
+                            measure=mv["measure"], dimension=mv["dimension"], group=name, change=change, month=mv["month"]))
+    return out

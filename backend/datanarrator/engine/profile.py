@@ -24,12 +24,14 @@ MEASURE_HINT = re.compile(
     r"amount|amt|sales|revenue|profit|loss|cost|price|qty|quantity|total|value|income|expense|salary|wage|"
     r"spend|budget|target|margin|discount|tax|fee|balance|units|volume|weight|score|duration|hours|"
     r"rate|age|marks|percent|pct|ratio|count|sum|gmv|mrp|turnover|premium|claim|stock|inventory|kwh|"
-    r"temperature|temp|height|length|distance|speed|days|visits|clicks|views|orders|rating|tenure", re.I)
+    r"temperature|temp|height|length|distance|speed|days|visits|clicks|views|orders|rating|tenure|items|lines|pieces|pcs|bills", re.I)
 AVG_HINT = re.compile(
     r"price|rate|pct|percent|%|ratio|score|age|temp|avg|average|mean|margin|rating|duration|lat|lon|"
     r"tenure|marks|grade|speed|height|weight|bmi|probability|share", re.I)
 GEO_HINT = re.compile(r"country|state|city|region|zone|district|province|territory|location|branch|area|market", re.I)
 YEAR_NAME = re.compile(r"year|yr|fy", re.I)
+PAID_VALUE = re.compile(r"^(paid|settled|cleared|closed|received|complete|completed|done|delivered)$", re.I)
+OPEN_VALUE = re.compile(r"^(unpaid|pending|part[\s-]*paid|partially[\s-]*paid|due|overdue|outstanding|open|not paid|partial|in transit)$", re.I)
 
 
 def _family(typ: str) -> str:
@@ -109,7 +111,9 @@ def profile(con, rel: str, row_count: int) -> dict:
         elif fam == "text":
             avg_len, space_frac = text_stats.get(name, (0, 0))
             geo = bool(GEO_HINT.search(name))
-            if id_name and (uniq_ratio > 0.3 or uniq > 60):
+            if re.search(r"address|street|landmark|remarks?|notes?|description|comments?", name, re.I):
+                col["role"] = "text"  # descriptive: shown, never ranked or grouped
+            elif id_name and (uniq_ratio > 0.3 or uniq > 60):
                 col["role"] = "id"
             elif avg_len > 40 and uniq_ratio > 0.5:
                 col["role"] = "text"
@@ -122,6 +126,25 @@ def profile(con, rel: str, row_count: int) -> dict:
         else:
             col["role"] = "other"
         columns.append(col)
+
+    # Exact counts and the actual values for small columns (estimates can be off by one or two).
+    small = [c for c in columns if c["role"] in ("dimension", "entity", "id") and c["unique"] <= 2000]
+    if small:
+        exprs = ", ".join(f"count(DISTINCT {q(c['name'])})" for c in small)
+        for c, n in zip(small, con.execute(f"SELECT {exprs} FROM __p").fetchone()):
+            c["unique"] = int(n)
+    for c in columns:
+        if c["role"] == "dimension" and c["unique"] <= 12:
+            c["values"] = [r[0] for r in con.execute(
+                f"SELECT CAST({q(c['name'])} AS VARCHAR) v FROM __p WHERE {q(c['name'])} IS NOT NULL"
+                f" GROUP BY 1 ORDER BY count(*) DESC").fetchall()]
+            vals = [v.strip() for v in c["values"]]
+            if any(PAID_VALUE.match(v) for v in vals) and any(OPEN_VALUE.match(v) for v in vals):
+                c["subtype"] = "status"  # Paid / Unpaid style: a state, not a group to compare
+    if n_rows:
+        # How many values are missing, as a count (used for "4 invoices have no GST").
+        for c in columns:
+            c["null_count"] = round(c["null_pct"] / 100 * n_rows) if not sampled else None
 
     dupes = 0
     if n_rows <= 5_000_000:

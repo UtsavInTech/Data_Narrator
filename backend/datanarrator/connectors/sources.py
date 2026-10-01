@@ -40,7 +40,8 @@ def _sniff(path: Path) -> str:
 
 def local_relations(con, path: Path, filename: str) -> list[tuple[str, str, dict]]:
     ext = Path(filename).suffix.lower() or _sniff(path)
-    stem = Path(filename).stem or "data"
+    stem = re.sub(r"[_\s]+", " ", Path(filename).stem).strip() or "data"
+    stem = stem[0].upper() + stem[1:]  # daily_sales -> Daily sales
     if ext in EXCEL_EXTS:
         out = []
         tables = parse_workbook(path)

@@ -1,10 +1,13 @@
 # Data Narrator
 
-Point it at any Excel file, cloud folder or database. It works out what every column means, finds what matters, and explains it in plain words, with no setup and no column mapping.
+Point it at any Excel file, cloud folder or database. It works out what every column means and writes a short report, in plain words, of what changed, what is owed and what needs attention. Your team records daily entries in forms built from your own columns, and the daily MIS report makes itself.
+
+**Try it in a minute:** log in, then choose **Load the sample company** on the Overview or under Data → Add data. Narmada Electricals is a fictional electricals distributor with 6 months of invoices, customers, products, invoice lines and payments, generated up to today.
 
 - **Reads real-world Excel.** It handles title rows, merged cells, two-row headers, several tables per sheet, subtotal/"Grand Total" rows, `₹1,234` and `(500)` stored as text, report-style grouping, months laid out as columns (turned into rows), and the same layout repeated on many sheets (stacked into one table). Every decision is shown under **Data → How we read it**.
 - **Works with any schema.** Each column gets a role (number, category, date, name, ID) from its values, not its name. Insights are generated from those roles.
 - **Joins tables automatically.** Shared keys like `Order ID` are detected, and related tables are combined.
+- **The story.** A narrated report for each table: this month vs last month, how it's moving, where it comes from, what changed by branch or salesperson, who matters most, money to collect (overdue by 30/60/90+ days, and who owes it) and things worth checking. Amounts in ₹ lakh and crore.
 - **Insights and next steps.** It produces trends, breakdowns, top performers, relationships, unusual values and data-quality issues, ranked by importance, plus a prioritised **What to do** list.
 - **Daily MIS work.** It provides:
     - entry forms generated from each table, with dropdowns, limits and duplicate checks

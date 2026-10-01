@@ -24,7 +24,9 @@ export function Spark({ values, width = 120, height = 36 }: { values: number[]; 
 }
 
 /** Horizontal bars with labels and values as text: readable on any screen. */
-export function Bars({ data, max = 6, showValues = true }: { data: { label?: string; value?: number }[]; max?: number; showValues?: boolean }) {
+export function Bars({ data, max = 6, showValues = true, column, suffix = "" }: {
+  data: { label?: string; value?: number }[]; max?: number; showValues?: boolean; column?: string; suffix?: string;
+}) {
   const rows = data.slice(0, max);
   const top = Math.max(...rows.map((d) => Math.abs(d.value ?? 0)), 1);
   return (
@@ -38,7 +40,7 @@ export function Bars({ data, max = 6, showValues = true }: { data: { label?: str
               <span className={`block h-full rounded-full ${v < 0 ? "bg-bad" : i === 0 ? "bg-ink" : "bg-line-2"}`}
                 style={{ width: `${Math.max(2, (Math.abs(v) / top) * 100)}%` }} />
             </span>
-            {showValues && <span className={`num text-right min-w-12 ${v < 0 ? "text-bad" : "text-ink-2"}`}>{fmt(v)}</span>}
+            {showValues && <span className={`num text-right min-w-14 ${v < 0 ? "text-bad" : "text-ink-2"}`}>{suffix ? `${v > 0 ? "+" : ""}${v}${suffix}` : fmt(v, column)}</span>}
           </li>
         );
       })}
@@ -46,38 +48,38 @@ export function Bars({ data, max = 6, showValues = true }: { data: { label?: str
   );
 }
 
-function Tip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
+function Tip({ active, payload, label, column }: { active?: boolean; payload?: { value: number }[]; label?: string; column?: string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-ink text-white rounded-md px-2.5 py-1.5 text-[12px] shadow-lg">
       <div className="opacity-70">{label}</div>
-      <div className="font-medium num">{fmtFull(payload[0].value)}</div>
+      <div className="font-medium num">{fmtFull(payload[0].value, column)}</div>
     </div>
   );
 }
 
 /** Full-size chart for an insight's own page. */
-export function ChartView({ chart }: { chart: Chart }) {
-  if (chart.kind === "bar") return <Bars data={chart.data} max={15} />;
+export function ChartView({ chart, height = 300, max = 15 }: { chart: Chart; height?: number; max?: number }) {
+  if (chart.kind === "bar") return <Bars data={chart.data} max={max} column={chart.y} suffix={chart.y.startsWith("%") ? "%" : ""} />;
   if (chart.kind === "scatter") {
     return (
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={height}>
         <ScatterChart margin={{ top: 8, right: 8, left: 0, bottom: 4 }}>
           <CartesianGrid stroke={GRID} />
-          <XAxis dataKey="x" type="number" name={chart.x} tick={tick} tickFormatter={fmt} domain={["auto", "auto"]} stroke={GRID} />
-          <YAxis dataKey="y" type="number" name={chart.y} tick={tick} tickFormatter={fmt} width={52} domain={["auto", "auto"]} stroke={GRID} />
+          <XAxis dataKey="x" type="number" name={chart.x} tick={tick} tickFormatter={(v: number) => fmt(v)} domain={["auto", "auto"]} stroke={GRID} />
+          <YAxis dataKey="y" type="number" name={chart.y} tick={tick} tickFormatter={(v: number) => fmt(v)} width={52} domain={["auto", "auto"]} stroke={GRID} />
           <Scatter data={chart.data} fill={INK} fillOpacity={0.45} />
         </ScatterChart>
       </ResponsiveContainer>
     );
   }
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ResponsiveContainer width="100%" height={height}>
       <LineChart data={chart.data} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey="label" tick={tick} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={28} />
-        <YAxis tick={tick} tickLine={false} axisLine={false} tickFormatter={fmt} width={52} />
-        <Tooltip content={<Tip />} cursor={{ stroke: "#d6d2c8" }} />
+        <YAxis tick={tick} tickLine={false} axisLine={false} tickFormatter={(v: number) => fmt(v, chart.y)} width={64} />
+        <Tooltip content={<Tip column={chart.y} />} cursor={{ stroke: "#d6d2c8" }} />
         <Line type="monotone" dataKey="value" stroke={INK} strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>

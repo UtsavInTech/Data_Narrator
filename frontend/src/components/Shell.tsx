@@ -12,7 +12,7 @@ export const NAV: Record<Role, Item[]> = {
   admin: [
     { to: "/", label: "Overview", icon: Home, end: true },
     { to: "/insights", label: "Insights", icon: Lightbulb },
-    { to: "/entry", label: "Entry", icon: ClipboardList },
+    { to: "/entry", label: "Record data", icon: ClipboardList },
     { to: "/reports", label: "Reports", icon: FileSpreadsheet },
     { to: "/data", label: "Data", icon: Database },
   ],
@@ -21,7 +21,7 @@ export const NAV: Record<Role, Item[]> = {
     { to: "/insights", label: "Insights", icon: Lightbulb },
     { to: "/reports", label: "Reports", icon: FileSpreadsheet },
   ],
-  operator: [{ to: "/entry", label: "Entry", icon: ClipboardList }],
+  operator: [{ to: "/entry", label: "Record data", icon: ClipboardList }],
 };
 
 export const ROLE_LABEL: Record<Role, string> = { admin: "Admin", manager: "Manager", operator: "Data entry" };
@@ -74,7 +74,7 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-full lg:flex">
       <ScrollTop />
-      <aside className="hidden lg:flex lg:flex-col w-60 shrink-0 h-screen sticky top-0 border-r border-line bg-surface">
+      <aside className="hidden lg:flex lg:flex-col w-56 shrink-0 h-screen sticky top-0 border-r border-line bg-surface">
         <div className="flex items-center gap-2.5 px-5 h-16">
           <img src="/icon.svg" alt="" className="w-7 h-7" />
           <span className="text-[16px] font-semibold tracking-tight">Data Narrator</span>
@@ -112,7 +112,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </Link>
           </div>
         </div>
-        <div className="max-w-[1080px] mx-auto px-4 sm:px-8 lg:px-12 pt-7 lg:pt-12">
+        <div className="max-w-[1360px] mx-auto px-4 sm:px-8 lg:px-12 pt-7 lg:pt-10">
           {children}
           <Templates />
         </div>

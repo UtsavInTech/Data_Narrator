@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { needsServer } from "../api";
 import { useAuth } from "../auth";
 import { ServerCard } from "../components/ServerCard";
@@ -30,10 +31,10 @@ export default function Login() {
     <div className="min-h-full flex flex-col pt-safe">
       <div className="flex-1 flex items-center justify-center px-5 py-12">
         <div className="w-full max-w-[22rem]">
-          <div className="flex items-center gap-2.5 mb-10">
+          <Link to="/" className="flex items-center gap-2.5 mb-10 w-fit">
             <img src="/icon.svg" alt="" className="w-8 h-8" />
             <span className="text-[17px] font-semibold tracking-tight">Data Narrator</span>
-          </div>
+          </Link>
           <h1 className="text-[24px] font-semibold tracking-[-0.015em]">{server ? "Connect to your server" : setupNeeded ? "Set up your workspace" : "Log in"}</h1>
           <p className="text-[15px] text-mute mt-1.5 mb-8">
             {server ? "Enter the address your admin gave you." : setupNeeded ? "Create the admin account. You'll add employees next." : "Use your Employee ID and password."}

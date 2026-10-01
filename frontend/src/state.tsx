@@ -22,10 +22,10 @@ function stored(): string | null {
   }
 }
 
-/** Picks a sensible default: joined models first (richest), then the newest ready table. */
+/** Opens the table that tells the fullest business story (dates, money, what's owed). */
 function pickDefault(ds: Dataset[]): Dataset | null {
   const ready = ds.filter((d) => d.status === "ready");
-  return ready.find((d) => d.kind === "model") ?? ready[0] ?? null;
+  return [...ready].sort((a, b) => (b.importance ?? 0) - (a.importance ?? 0))[0] ?? null;
 }
 
 export function DataProvider({ children }: { children: ReactNode }) {

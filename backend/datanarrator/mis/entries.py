@@ -84,13 +84,26 @@ def _load(ds_id: str) -> list[dict]:
     return [{**dict(r), "data": json.loads(r["data"])} for r in rows]
 
 
+def fields_for(con, ds: dict, rel: str, prof: dict) -> list[dict]:
+    """The entry form for a table, with lookups into the tables its keys point to."""
+    lookups = {}
+    for link in service.links_for(ds["owner"]):
+        if link["many"] != ds["id"] or link["many_col"] in lookups:
+            continue
+        one = catalog.get(link["one"])
+        one_prof = catalog.load_json(link["one"], "profile") if one else None
+        if one and one_prof:
+            lookups[link["many_col"]] = rules._lookup(con, {**link, "one_name": one["name"]}, service.relation(one), one_prof)
+    return rules.form(con, rel, prof, lookups)
+
+
 def _context(ds: dict):
     prof = catalog.load_json(ds["id"], "profile")
     if not prof:
         raise HTTPException(409, "This table is still being analysed")
     con = connect()
     rel = service.relation(ds)
-    return con, rel, rules.form(con, rel, prof)
+    return con, rel, fields_for(con, ds, rel, prof)
 
 
 def drafts(ds: dict) -> list[dict]:

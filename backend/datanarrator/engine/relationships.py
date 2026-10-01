@@ -45,9 +45,10 @@ def detect(con, tables: list[dict]) -> list[dict]:
     return links
 
 
-def model_sql(fact: dict, joins: list[tuple[dict, dict]]) -> str:
-    """fact: table dict; joins: [(dim table dict, link)] -> SELECT joining dims onto the fact."""
+def model_sql(fact: dict, joins: list[tuple[dict, dict]]) -> tuple[str, list[str]]:
+    """-> (SELECT joining dims onto the fact, names of the columns brought in from the dims)."""
     fact_cols = {c["name"].lower() for c in fact["profile"]["columns"]}
+    added: list[str] = []
     select = ["f.*"]
     from_ = [f"{parquet(fact['path'])} AS f"]
     for i, (dim, link) in enumerate(joins):
@@ -57,7 +58,8 @@ def model_sql(fact: dict, joins: list[tuple[dict, dict]]) -> str:
                 continue
             out_name = c["name"] if c["name"].lower() not in fact_cols else f"{dim['name']} {c['name']}"
             fact_cols.add(out_name.lower())
+            added.append(out_name)
             select.append(f"{alias}.{q(c['name'])} AS {q(out_name)}")
         from_.append(f"LEFT JOIN {parquet(dim['path'])} AS {alias}"
                      f" ON CAST(f.{q(link['many_col'])} AS VARCHAR) = CAST({alias}.{q(link['one_col'])} AS VARCHAR)")
-    return f"(SELECT {', '.join(select)} FROM {' '.join(from_)})"
+    return f"(SELECT {', '.join(select)} FROM {' '.join(from_)})", added

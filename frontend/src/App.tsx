@@ -12,15 +12,24 @@ import EntryTable from "./pages/EntryTable";
 import Home from "./pages/Home";
 import InsightDetail from "./pages/InsightDetail";
 import Insights from "./pages/Insights";
+import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import { DataProvider } from "./state";
 
 function Gate() {
-  const { user, checking } = useAuth();
+  const { user, checking, setupNeeded } = useAuth();
   if (checking) return <Spinner />;
-  if (needsServer() || !user) return <Login />;
+  if (needsServer()) return <Login />;
+  if (!user) {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Landing setupNeeded={setupNeeded} />} />
+      </Routes>
+    );
+  }
   const r = user.role;
   const home = NAV[r][0].to;
   const can = { insights: r !== "operator", entry: r !== "manager", reports: r !== "operator", data: r === "admin" };

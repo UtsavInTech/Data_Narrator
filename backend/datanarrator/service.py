@@ -146,11 +146,24 @@ def analyze(ds_id: str):
         rel = relation(ds)
         rows = con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0]
         prof = profile.profile(con, rel, rows)
+        table_name = ds["name"]
+        if ds["kind"] == "model":
+            # Numbers from a lookup table (e.g. a customer's credit limit) repeat on every row: never add them up.
+            dim_cols = set(ds["meta"].get("dim_columns", []))
+            for c in prof["columns"]:
+                if c["name"] in dim_cols and c["role"] == "measure":
+                    c["role"], c["agg"] = "attribute", None
+            table_name = ds["meta"].get("fact_name", table_name)
         catalog.update(ds_id, stage="insights")
-        result = insights.generate(con, rel, prof)
-        result["actions"] = actions.recommend(result["insights"])
+        result = insights.generate(con, rel, prof, table_name)
+        result["actions"] = actions.recommend(result["insights"], result["story"]["facts"].get("main_measure"))
         catalog.save_json(ds_id, "profile", prof)
         catalog.save_json(ds_id, "insights", result)
+        # How complete a business picture this table gives; the app opens the best one first.
+        f = result["story"]["facts"]
+        importance = (2 * bool(result.get("time_column")) + 2 * bool(f.get("receivables")) + bool(f.get("main_measure"))
+                      + (ds["kind"] == "model") + min(len(result["insights"]), 10) / 10)
+        catalog.update(ds_id, meta={**ds["meta"], "importance": round(importance, 2)})
         catalog.update(ds_id, status="ready", stage=None, row_count=rows, column_count=len(prof["columns"]))
     except Exception as e:
         log.error("analysis failed for %s: %s", ds_id, traceback.format_exc())
@@ -198,8 +211,9 @@ def refresh_models(owner: str):
                 joins.append((by_id[l["one"]], l))
                 used.add(l["one"])
         name = " + ".join([fact["name"], *(d["name"] for d, _ in joins)])
-        wanted[name] = (relationships.model_sql(fact, joins),
-                        {"fact": fact_id, "links": [l for _, l in joins]})
+        sql, dim_cols = relationships.model_sql(fact, joins)
+        wanted[name] = (sql, {"fact": fact_id, "fact_name": fact["name"], "links": [l for _, l in joins],
+                              "dim_columns": dim_cols})
 
     existing = {m["name"]: m for m in catalog.list_for(owner, "model")}
     for name, m in existing.items():

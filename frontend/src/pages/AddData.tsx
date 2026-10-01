@@ -1,4 +1,4 @@
-import { ChevronRight, Cloud, FileSpreadsheet, Server, UploadCloud, X } from "lucide-react";
+import { Building2, ChevronRight, Cloud, FileSpreadsheet, Server, UploadCloud, X } from "lucide-react";
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
@@ -45,6 +45,14 @@ export default function AddData() {
                 <span className="flex-1 min-w-0">
                   <span className="block text-[15px] font-medium">Cloud folder or link</span>
                   <span className="block text-[13px] text-mute">Google Drive & Sheets, OneDrive, SharePoint, Dropbox, Amazon S3, Google Cloud, Azure</span>
+                </span>
+                <ChevronRight size={16} className="text-faint" />
+              </Row>
+              <Row onClick={() => run(() => api.loadDemo())}>
+                <Building2 size={20} className="text-mute shrink-0" />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[15px] font-medium">Sample company</span>
+                  <span className="block text-[13px] text-mute">Narmada Electricals (fictional): 6 months of invoices, customers, products and payments, to try everything</span>
                 </span>
                 <ChevronRight size={16} className="text-faint" />
               </Row>

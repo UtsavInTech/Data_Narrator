@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .. import auth, catalog, config, service
+from .. import auth, catalog, config, demo, service
 from ..connectors import sources
 from ..db import connect, fetch_dicts
 from ..mis import entries, reports, rules, scheduler, templates
@@ -46,6 +46,7 @@ def _public(ds: dict) -> dict:
     out = {k: ds[k] for k in ("id", "name", "kind", "source_type", "source_label", "row_count",
                               "column_count", "status", "stage", "error", "created_at", "updated_at")}
     out["writeback"] = entries.writeback_enabled(ds["id"])
+    out["importance"] = (ds.get("meta") or {}).get("importance", 0)
     return out
 
 
@@ -216,6 +217,20 @@ def connect_database(body: DbSource, user: dict = Depends(ADMIN)):
     return {"imports": [_public(ds)]}
 
 
+@app.post("/api/demo", status_code=202)
+def load_demo(user: dict = Depends(ADMIN)):
+    """Load the sample company (Narmada Electricals): five related Excel files, dated up to today."""
+    if any(d["source_label"].startswith(demo.COMPANY) for d in catalog.list_for(OWNER)):
+        raise HTTPException(409, "The sample company is already loaded")
+    folder = config.STORAGE_DIR / "demo" / uuid.uuid4().hex[:8]
+    started = []
+    for path in demo.write(folder):
+        label = f"{demo.COMPANY} · {path.name}"
+        started.append(_public(service.start_import(
+            OWNER, label, "upload", lambda con, p=path: sources.local_relations(con, p, p.name), [path], user=user["employee_id"])))
+    return {"imports": started}
+
+
 # ---------------------------------------------------------------- datasets
 
 @app.get("/api/datasets")
@@ -289,7 +304,7 @@ def _fields(ds: dict) -> list[dict]:
     prof = catalog.load_json(ds["id"], "profile")
     con = connect()
     try:
-        return rules.form(con, service.relation(ds), prof)
+        return entries.fields_for(con, ds, service.relation(ds), prof)
     finally:
         con.close()
 
@@ -371,9 +386,24 @@ class Schedule(BaseModel):
     enabled: bool
 
 
+def _reportable(ds_id: str) -> dict:
+    ds = _get(ds_id)
+    if ds["kind"] == "import" or not catalog.load_json(ds_id, "profile"):
+        raise HTTPException(409, "This table is still being prepared")
+    return ds
+
+
+@app.get("/api/mis/{ds_id}/daily-report")
+def mis_daily_screen(ds_id: str, date: str | None = None, user: dict = Depends(MANAGERS)):
+    """The daily report as data, to read on screen."""
+    ds = _reportable(ds_id)
+    rep = reports.compute(ds, dt.date.fromisoformat(date) if date else None, user["name"])
+    return reports.for_screen(rep)
+
+
 @app.get("/api/mis/{ds_id}/daily-report.xlsx")
 def mis_daily(ds_id: str, date: str | None = None, user: dict = Depends(MANAGERS)):
-    ds = _table(ds_id)
+    ds = _reportable(ds_id)
     day = dt.date.fromisoformat(date) if date else None
     path, day = reports.build(ds, day, user["name"])
     return FileResponse(path, filename=f"{ds['name'][:60]} {day:%d-%m-%Y}.xlsx")
@@ -381,13 +411,13 @@ def mis_daily(ds_id: str, date: str | None = None, user: dict = Depends(MANAGERS
 
 @app.get("/api/mis/{ds_id}/schedule")
 def mis_schedule(ds_id: str, _: dict = Depends(MANAGERS)):
-    _table(ds_id)
+    _reportable(ds_id)
     return scheduler.get(ds_id)
 
 
 @app.put("/api/mis/{ds_id}/schedule")
 def mis_set_schedule(ds_id: str, body: Schedule, _: dict = Depends(MANAGERS)):
-    _table(ds_id)
+    _reportable(ds_id)
     return scheduler.put(ds_id, body.at_time, body.which_day, body.enabled)
 
 

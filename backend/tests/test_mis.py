@@ -45,7 +45,7 @@ def client():
         today = dt.date.today()
         c.post("/api/sources/upload", files={"files": ("daily_sales.csv", _sales_csv(
             [today - dt.timedelta(days=k) for k in range(3, 0, -1)]), "text/csv")})
-        _wait_ready(c, "daily_sales")
+        _wait_ready(c, "Daily sales")
         yield c
 
 
@@ -65,14 +65,14 @@ def test_login_required_and_roles(client):
 
 
 def test_form_is_learnt_from_data(client):
-    ds = _wait_ready(client, "daily_sales")
+    ds = _wait_ready(client, "Daily sales")
     fields = {f["name"]: f for f in client.get(f"/api/mis/{ds['id']}/form").json()["fields"]}
     assert fields["Branch"]["kind"] == "select" and fields["Branch"]["options"] == ["Delhi", "Kochi", "Pune"]
     assert fields["Date"]["kind"] == "date" and fields["Units"]["min"] == 0 and fields["Units"]["required"]
 
 
 def test_entry_draft_commit_flow(client):
-    ds = _wait_ready(client, "daily_sales")
+    ds = _wait_ready(client, "Daily sales")
     op = _as(client, "OP7", "ravi1234")
     base = f"/api/mis/{ds['id']}"
     today = dt.date.today().isoformat()
@@ -89,7 +89,7 @@ def test_entry_draft_commit_flow(client):
     res = client.post(f"{base}/commit", json={"employee_id": "OP7", "password": "ravi1234"}, headers=op).json()
     assert res["rows"] == 2 and res["committed_by"]["employee_id"] == "OP7"
     assert client.get(f"{base}/entries", headers=op).json()["entries"] == []
-    ds = _wait_ready(client, "daily_sales", rows=11)
+    ds = _wait_ready(client, "Daily sales", rows=11)
     batches = client.get(f"/api/datasets/{ds['id']}").json()["batches"]
     assert batches[0]["kind"] == "entry" and batches[0]["created_by"] == "OP7"
 
@@ -99,14 +99,14 @@ def test_same_layout_upload_appends_and_duplicate_is_refused(client):
     data = _sales_csv([today])
     r = client.post("/api/sources/upload", files={"files": ("daily_sales_today.csv", data, "text/csv")})
     assert r.status_code == 202
-    ds = _wait_ready(client, "daily_sales", rows=14)
+    ds = _wait_ready(client, "Daily sales", rows=14)
     assert not [d for d in client.get("/api/datasets").json()["datasets"] if d["name"] == "daily_sales_today"]
     again = client.post("/api/sources/upload", files={"files": ("copy.csv", data, "text/csv")})
     assert again.status_code == 409 and "already added" in again.json()["detail"]
 
 
 def test_template_has_dropdowns(client):
-    ds = _wait_ready(client, "daily_sales")
+    ds = _wait_ready(client, "Daily sales")
     r = client.get(f"/api/mis/{ds['id']}/template.xlsx")
     wb = load_workbook(io.BytesIO(r.content))
     ws = wb.worksheets[0]
@@ -115,14 +115,14 @@ def test_template_has_dropdowns(client):
 
 
 def test_daily_report(client):
-    ds = _wait_ready(client, "daily_sales")
+    ds = _wait_ready(client, "Daily sales")
     mg = _as(client, "MG2", "meera123")
     r = client.get(f"/api/mis/{ds['id']}/daily-report.xlsx", headers=mg)
     assert r.status_code == 200
     wb = load_workbook(io.BytesIO(r.content))
     assert wb.sheetnames == ["Summary", "By Branch", "Rows", "Checks"]
     summary = {row[0]: row for row in wb["Summary"].iter_rows(min_row=5, values_only=True) if row[0]}
-    assert summary["Rows"][1] == 5, "3 uploaded + 2 entered today"
+    assert summary["Records"][1] == 5, "3 uploaded + 2 entered today"
     checks = [row[1] for row in wb["Checks"].iter_rows(min_row=2, values_only=True)]
     assert any("Nashik" in (c or "") for c in checks), "a new branch is flagged"
     assert client.get("/api/mis/reports", headers=mg).json()["reports"]

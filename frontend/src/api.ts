@@ -19,14 +19,21 @@ export interface Dataset {
   created_at: number;
   updated_at: number;
   writeback?: boolean;
+  importance?: number;
 }
 
 export type Role = "admin" | "manager" | "operator";
 export interface User { employee_id: string; name: string; role: Role; active: boolean }
 
+export interface LookupOption { value: string; label: string; detail: Record<string, unknown> }
+export interface Formula { target: string; op: "add" | "mul" | "days"; args: string[]; k?: number }
+
 export interface Field {
   name: string;
-  kind: "select" | "number" | "date" | "datetime" | "boolean" | "text" | "textarea";
+  kind: "select" | "number" | "date" | "datetime" | "boolean" | "text" | "textarea" | "lookup";
+  lookup?: { table: string | null; options: LookupOption[] };
+  formula?: Formula;
+  next?: string | null;
   role: string;
   required: boolean;
   options: string[] | null;
@@ -41,6 +48,15 @@ export interface Entry { id: string; data: Record<string, unknown>; errors: Reco
 export interface Batch { id: string; kind: "import" | "entry"; rows: number; source: string; created_by: string | null; created_at: number }
 export interface MisTable extends Dataset { drafts: number; last_added: number | null }
 export interface ReportFile { ds_id: string; dataset: string; date: string; file: string; created_at: number }
+export interface ReportMetric { label: string; kind: string; today: number | null; previous: number | null; change: number | null; week_ago: number | null; month_to_date: number | null }
+export interface DailyReport {
+  title: string; dataset: string; day: string; previous_day: string | null; week_ago: string; basis: string;
+  generated_by: string; generated_at: string; metrics: ReportMetric[]; highlights: string[];
+  groups: { dimension: string; headers: string[]; rows: (string | number)[][]; total: (string | number)[]; money: boolean[] }[];
+  rows: { columns: string[]; total: number; data: unknown[][] };
+  checks: { column: string; problem: string; rows: number }[];
+}
+
 export interface Schedule { at_time: string; which_day: "today" | "yesterday"; enabled: number | boolean; last_run: string | null }
 
 export interface Link { many: string; one: string; many_col: string; one_col: string; coverage: number }
@@ -48,7 +64,8 @@ export interface Link { many: string; one: string; many_col: string; one_col: st
 export interface Column {
   name: string;
   type: string;
-  role: "measure" | "dimension" | "time" | "entity" | "id" | "text" | "empty" | "constant" | "other";
+  role: "measure" | "dimension" | "time" | "entity" | "id" | "text" | "empty" | "constant" | "attribute" | "other";
+  values?: string[];
   agg: "sum" | "avg" | null;
   subtype: string | null;
   null_pct: number;
@@ -77,11 +94,12 @@ export interface Chart { kind: "bar" | "line" | "scatter"; x: string; y: string;
 
 export interface Insight {
   id: string;
-  type: "breakdown" | "trend" | "top" | "correlation" | "outlier" | "quality";
+  type: "breakdown" | "trend" | "top" | "correlation" | "outlier" | "quality" | "collect" | "mover";
   title: string;
   summary: string;
   narrative: string;
   score: number;
+  details?: string[];
   chart: Chart | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   facts: Record<string, any>;
@@ -90,8 +108,13 @@ export interface Insight {
 export interface Kpi { label: string; value: number | null; display: string; agg: string; delta: number | null; period: string | null }
 export interface Action { id: string; priority: "high" | "medium" | "low"; title: string; detail: string; insight_id: string; category: string }
 
+export interface StorySection { key: string; heading: string; paragraphs: string[]; insight_id?: string }
+export interface Story { lead: string; sections: StorySection[]; facts: Record<string, unknown> & { ref_date?: string } }
+
 export interface InsightsResponse {
   dataset: Dataset;
+  story: Story;
+  about: string;
   kpis: Kpi[];
   insights: Insight[];
   actions: Action[];
@@ -226,6 +249,8 @@ export const api = {
   commit: (id: string, b: { employee_id: string; password: string; push: boolean }) =>
     call<{ rows: number; pushed: boolean; committed_by: User }>(`/api/mis/${id}/commit`, json(b)),
   reports: () => call<{ reports: ReportFile[] }>("/api/mis/reports"),
+  dailyReport: (id: string, date?: string) => call<DailyReport>(`/api/mis/${id}/daily-report${date ? `?date=${date}` : ""}`),
+  loadDemo: () => call<{ imports: Dataset[] }>("/api/demo", { method: "POST" }),
   schedule: (id: string) => call<Schedule>(`/api/mis/${id}/schedule`),
   setSchedule: (id: string, b: { at_time: string; which_day: string; enabled: boolean }) => call<Schedule>(`/api/mis/${id}/schedule`, json(b, "PUT")),
 };

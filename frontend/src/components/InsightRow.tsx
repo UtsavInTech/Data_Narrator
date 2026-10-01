@@ -22,12 +22,12 @@ export function InsightRow({ insight, datasetId, full = false }: { insight: Insi
           {insight.title}
           <ChevronRight size={15} className="inline ml-0.5 -mt-0.5 text-faint group-hover:text-ink" />
         </h3>
-        <p className="text-[14px] text-ink-2 mt-1 leading-relaxed">{full ? insight.narrative : insight.summary}</p>
+        <p className="text-[14.5px] text-ink-2 mt-1 leading-relaxed">{full ? insight.narrative : insight.summary}</p>
       </div>
       {chart && (
         <div className="col-span-2 sm:col-span-1 self-center">
           {chart.kind === "line" && <Spark values={chart.data.map((d) => d.value ?? 0)} width={240} height={44} />}
-          {chart.kind === "bar" && <Bars data={chart.data} max={4} showValues={false} />}
+          {chart.kind === "bar" && <Bars data={chart.data} max={4} showValues={false} column={chart.y} />}
         </div>
       )}
     </Link>
