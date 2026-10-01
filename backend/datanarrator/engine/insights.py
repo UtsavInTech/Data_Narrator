@@ -8,6 +8,7 @@ surprising/uneven it is, and only the best are shown first.
 """
 import datetime as dt
 import math
+import re
 
 from ..db import fetch_dicts, q
 from .fmt import num, pct
@@ -16,6 +17,8 @@ from .profile import MEASURE_HINT, by_role
 RECORDS = {"name": "Records", "agg": "count"}
 _FLAG_VALUES = {"true", "false", "yes", "no", "y", "n", "0", "1", "(blank)"}
 MAX_MEASURES, MAX_DIMS, MAX_ENTITIES = 4, 8, 2
+# Money columns lead KPIs, rankings and reports.
+MONEY = re.compile(r"revenue|sales|amount|amt|value|turnover|gmv|income|profit", re.I)
 
 
 # ---------------------------------------------------------------- selection
@@ -28,7 +31,8 @@ def agg_sql(m: dict) -> str:
 
 def pick_measures(prof) -> list[dict]:
     ms = by_role(prof, "measure")
-    ms.sort(key=lambda c: (not MEASURE_HINT.search(c["name"]), c["agg"] != "sum", c["null_pct"]))
+    ms.sort(key=lambda c: (not MONEY.search(c["name"]), not MEASURE_HINT.search(c["name"]), c["agg"] != "sum",
+                           c["null_pct"]))
     return ms[:MAX_MEASURES]
 
 

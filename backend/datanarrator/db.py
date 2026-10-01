@@ -30,6 +30,11 @@ def lit(value: str) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+def parquet(path: str) -> str:
+    """Read one file or a folder glob of parts; columns are matched by name across parts."""
+    return f"read_parquet({lit(path)}, union_by_name=true)"
+
+
 def jsonable(v):
     if v is None:
         return None

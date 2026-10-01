@@ -1,14 +1,12 @@
 import { CheckCircle2, Server } from "lucide-react";
 import { useState } from "react";
 import { api, getServer, setServer } from "../api";
-import { useData } from "../state";
 import { Button, Card, ErrorNote, Field, inputCls } from "./ui";
 
 export function ServerCard({ onConnected }: { onConnected?: () => void }) {
   const [url, setUrl] = useState(getServer());
   const [status, setStatus] = useState<"idle" | "ok" | "busy">("idle");
   const [error, setError] = useState<string | null>(null);
-  const { reload } = useData();
 
   const save = async () => {
     setStatus("busy");
@@ -20,7 +18,6 @@ export function ServerCard({ onConnected }: { onConnected?: () => void }) {
       setServer(clean);
       setUrl(clean);
       setStatus("ok");
-      await reload();
       onConnected?.();
     } catch (e) {
       setError((e as Error).message);

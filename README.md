@@ -6,6 +6,13 @@ Point it at any Excel file, cloud folder or database. It works out what every co
 - **Works with any schema.** Each column gets a role (number, category, date, name, ID) from its values, not its name. Insights are generated from those roles.
 - **Joins tables automatically.** Shared keys like `Order ID` are detected, and related tables are combined.
 - **Insights and next steps.** It produces trends, breakdowns, top performers, relationships, unusual values and data-quality issues, ranked by importance, plus a prioritised **What to do** list.
+- **Daily MIS work.** It provides:
+    - entry forms generated from each table, with dropdowns, limits and duplicate checks
+    - drafts that are only saved when an employee **commits with Employee ID + password**, with optional write-back to the source PostgreSQL/MySQL database
+    - same-layout sheets appended to the same table, with history of who added what and when
+    - a **daily Excel report** (today vs previous day vs last week, month to date, per-branch sheets, checks, missing submissions), on demand or scheduled
+    - blank **Excel templates** with dropdowns
+- **Simple roles.** Operators see Entry. Managers see insights and reports. Admins see everything plus data sources and employees.
 - **Scales.** Built on DuckDB and Parquet. 100 million rows were analysed in about 23 s on an 8 GB laptop.
 - **Self-hosted.** One Docker container. Your data stays on your servers.
 
@@ -31,7 +38,9 @@ uvicorn datanarrator.api.main:app --reload       # http://localhost:8000
 cd frontend && npm install && npm run dev
 ```
 
-Try it with the files in `samples/`. `Sharma Traders FY25.xlsx` is a deliberately messy company workbook.
+On first open, create the admin account (Employee ID + password), then add employees under **Settings**.
+
+Try it with the files in `samples/`. `Daily Branch Sales.xlsx` is a daily MIS sheet for testing entry and reports. `Sharma Traders FY25.xlsx` is a deliberately messy company workbook.
 
 **Android app**
 
@@ -81,10 +90,11 @@ Settings are environment variables: `DN_STORAGE_DIR`, `DN_DUCKDB_MEMORY_LIMIT` (
 
 ## Roadmap
 
-- [ ] Login, users and roles; per-company workspaces
+- [ ] Report delivery by email / WhatsApp
+- [ ] Downloads inside the Android app (native file saving)
+- [ ] Scheduled refresh of cloud and database sources (live data)
 - [ ] Ask questions in plain language (optional LLM, cloud or local)
 - [ ] Narration in Hindi, Bengali, Tamil, Telugu and more
-- [ ] Scheduled refresh for cloud and database sources
 - [ ] Postgres catalog + job queue for many API replicas
 
 ## License

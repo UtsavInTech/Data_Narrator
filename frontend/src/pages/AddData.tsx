@@ -145,6 +145,7 @@ function CloudForm({ busy, onSubmit }: { busy: boolean; onSubmit: (b: Record<str
 
 function DbForm({ busy, onSubmit }: { busy: boolean; onSubmit: (b: Record<string, unknown>) => void }) {
   const [v, setV] = useState({ type: "postgres", host: "", port: "", database: "", user: "", password: "", schema: "", tables: "" });
+  const [writeback, setWriteback] = useState(false);
   const set = (k: keyof typeof v) => (e: { target: { value: string } }) => setV({ ...v, [k]: e.target.value });
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -153,6 +154,7 @@ function DbForm({ busy, onSubmit }: { busy: boolean; onSubmit: (b: Record<string
       port: v.port ? Number(v.port) : null,
       schema: v.schema || null,
       tables: v.tables.split(",").map((t) => t.trim()).filter(Boolean),
+      allow_writeback: writeback,
     });
   };
   return (
@@ -182,7 +184,11 @@ function DbForm({ busy, onSubmit }: { busy: boolean; onSubmit: (b: Record<string
       <Field label="Tables (optional)" hint="Comma-separated. Leave empty to import every table (up to 100).">
         <input className={inputCls} value={v.tables} onChange={set("tables")} placeholder="orders, customers" />
       </Field>
-      <p className="text-[13px] text-mute mb-4">Read-only. We take a snapshot; your password is not stored.</p>
+      <label className="flex items-start gap-3 mb-4 text-[15px]">
+        <input type="checkbox" checked={writeback} onChange={(e) => setWriteback(e.target.checked)} className="w-5 h-5 mt-0.5 accent-zinc-900" />
+        <span>Allow committed entries to be saved back to this database
+          <span className="block text-[13px] text-mute">The connection is then kept on this server. Leave off for read-only.</span></span>
+      </label>
       <Button className="w-full" busy={busy} type="submit">Connect</Button>
     </form>
   );

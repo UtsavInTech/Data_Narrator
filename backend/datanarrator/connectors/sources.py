@@ -43,7 +43,11 @@ def local_relations(con, path: Path, filename: str) -> list[tuple[str, str, dict
     stem = Path(filename).stem or "data"
     if ext in EXCEL_EXTS:
         out = []
-        for t in parse_workbook(path):
+        tables = parse_workbook(path)
+        for t in tables:
+            # Excel's default sheet names say nothing; use the file name instead.
+            if re.fullmatch(r"(sheet|blad|feuil|hoja)\s*\d*", t.name.strip(), re.I):
+                t.name = stem if len(tables) == 1 else f"{stem} - {t.name}"
             view = f"xl_{uuid.uuid4().hex[:8]}"
             con.register(view, t.frame)
             out.append((t.name, view, {"format": "excel", **t.report}))

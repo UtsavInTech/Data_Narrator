@@ -123,6 +123,11 @@ def test_sample_tables_are_joined():
 def test_api_upload_flow():
     from datanarrator.api.main import app
     with TestClient(app) as client:
+        from datanarrator import auth
+        if auth.setup_needed():
+            client.post("/api/auth/setup", json={"employee_id": "ADM1", "name": "Admin", "password": "secret123"})
+        token = client.post("/api/auth/login", json={"employee_id": "ADM1", "password": "secret123"}).json()["token"]
+        client.headers["Authorization"] = f"Bearer {token}"
         with open(SAMPLES / "Order Details.csv", "rb") as fh:
             r = client.post("/api/sources/upload", files={"files": ("Order Details.csv", fh, "text/csv")})
         assert r.status_code == 202

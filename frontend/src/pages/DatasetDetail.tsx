@@ -136,6 +136,20 @@ export default function DatasetDetail() {
             </>
           )}
 
+          {detail.batches.length > 0 && (
+            <>
+              <h2 className="text-[18px] font-semibold mt-8 mb-3">History</h2>
+              <Card className="divide-y divide-line">
+                {detail.batches.slice(0, 20).map((b) => (
+                  <div key={b.id} className="flex items-center gap-3 px-4 min-h-14 text-[15px]">
+                    <span className="flex-1 min-w-0 truncate">{b.kind === "entry" ? "Entered" : "Imported"} · {b.source}</span>
+                    <span className="text-mute text-[13px] text-right">{b.rows.toLocaleString()} rows{b.created_by ? ` · ${b.created_by}` : ""}<br />{new Date(b.created_at * 1000).toLocaleString()}</span>
+                  </div>
+                ))}
+              </Card>
+            </>
+          )}
+
           {preview && preview.rows.length > 0 && (
             <>
               <h2 className="text-[18px] font-semibold mt-8 mb-3">Preview</h2>

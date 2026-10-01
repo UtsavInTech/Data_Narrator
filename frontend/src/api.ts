@@ -17,7 +17,30 @@ export interface Dataset {
   error: string | null;
   created_at: number;
   updated_at: number;
+  writeback?: boolean;
 }
+
+export type Role = "admin" | "manager" | "operator";
+export interface User { employee_id: string; name: string; role: Role; active: boolean }
+
+export interface Field {
+  name: string;
+  kind: "select" | "number" | "date" | "datetime" | "boolean" | "text" | "textarea";
+  role: string;
+  required: boolean;
+  options: string[] | null;
+  suggestions: string[] | null;
+  min: number | null;
+  integer: boolean;
+  unique: boolean;
+  default: string | null;
+}
+
+export interface Entry { id: string; data: Record<string, unknown>; errors: Record<string, string>; warnings: Record<string, string>; created_by?: string }
+export interface Batch { id: string; kind: "import" | "entry"; rows: number; source: string; created_by: string | null; created_at: number }
+export interface MisTable extends Dataset { drafts: number; last_added: number | null }
+export interface ReportFile { ds_id: string; dataset: string; date: string; file: string; created_at: number }
+export interface Schedule { at_time: string; which_day: "today" | "yesterday"; enabled: number | boolean; last_run: string | null }
 
 export interface Link { many: string; one: string; many_col: string; one_col: string; coverage: number }
 
@@ -80,6 +103,7 @@ export interface DatasetDetail {
   profile: Profile | null;
   import_report: ImportReport | null;
   model: { fact: string; links: Link[] } | null;
+  batches: Batch[];
 }
 
 const KEY = "dn.server";
@@ -103,18 +127,50 @@ export function setServer(url: string) {
 /** The installed app has no server of its own: the user must point it at one first. */
 export const needsServer = () => Capacitor.isNativePlatform() && !getServer();
 
+const TOKEN = "dn.token";
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN);
+  } catch {
+    return null;
+  }
+}
+
+export function setToken(t: string | null) {
+  try {
+    if (t) localStorage.setItem(TOKEN, t);
+    else localStorage.removeItem(TOKEN);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** A link for files (templates, reports) that a plain <a> can open. */
+export function fileUrl(path: string) {
+  const sep = path.includes("?") ? "&" : "?";
+  return `${getServer()}${path}${sep}token=${encodeURIComponent(getToken() ?? "")}`;
+}
+
 async function call<T>(path: string, init?: RequestInit, base = getServer()): Promise<T> {
   let res: Response;
+  const headers = new Headers(init?.headers);
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
   try {
-    res = await fetch(`${base}${path}`, init);
+    res = await fetch(`${base}${path}`, { ...init, headers });
   } catch {
     throw new Error("Can't reach the server. Check the server address in Settings.");
+  }
+  if (res.status === 401 && token) {
+    setToken(null);
+    window.dispatchEvent(new Event("dn:logout"));
   }
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
-      msg = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail);
+      msg = typeof body.detail === "string" ? body.detail : body.detail?.message ?? JSON.stringify(body.detail);
     } catch {
       /* not JSON */
     }
@@ -126,8 +182,8 @@ async function call<T>(path: string, init?: RequestInit, base = getServer()): Pr
   return res.json();
 }
 
-const json = (body: unknown): RequestInit => ({
-  method: "POST",
+const json = (body: unknown, method = "POST"): RequestInit => ({
+  method,
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(body),
 });
@@ -148,4 +204,25 @@ export const api = {
   },
   connectUrl: (body: Record<string, string>) => call<{ imports: Dataset[] }>("/api/sources/url", json(body)),
   connectDb: (body: Record<string, unknown>) => call<{ imports: Dataset[] }>("/api/sources/database", json(body)),
+
+  authStatus: () => call<{ setup_needed: boolean }>("/api/auth/status"),
+  setup: (b: { employee_id: string; name: string; password: string }) => call<{ token: string; user: User }>("/api/auth/setup", json(b)),
+  login: (employee_id: string, password: string) => call<{ token: string; user: User }>("/api/auth/login", json({ employee_id, password })),
+  me: () => call<{ user: User }>("/api/auth/me"),
+  logout: () => call("/api/auth/logout", { method: "POST" }),
+  users: () => call<{ users: User[]; roles: Role[] }>("/api/users"),
+  addUser: (b: { employee_id: string; name: string; password: string; role: Role }) => call<{ user: User }>("/api/users", json(b)),
+  editUser: (id: string, b: Partial<{ role: Role; active: boolean; password: string }>) => call(`/api/users/${encodeURIComponent(id)}`, json(b, "PATCH")),
+
+  misTables: () => call<{ tables: MisTable[] }>("/api/mis/tables"),
+  form: (id: string) => call<{ dataset: Dataset; fields: Field[] }>(`/api/mis/${id}/form`),
+  entries: (id: string) => call<{ entries: Entry[] }>(`/api/mis/${id}/entries`),
+  addEntry: (id: string, data: Record<string, unknown>) => call<Entry>(`/api/mis/${id}/entries`, json({ data })),
+  editEntry: (id: string, eid: string, data: Record<string, unknown>) => call<Entry>(`/api/mis/${id}/entries/${eid}`, json({ data }, "PUT")),
+  deleteEntry: (id: string, eid: string) => call(`/api/mis/${id}/entries/${eid}`, { method: "DELETE" }),
+  commit: (id: string, b: { employee_id: string; password: string; push: boolean }) =>
+    call<{ rows: number; pushed: boolean; committed_by: User }>(`/api/mis/${id}/commit`, json(b)),
+  reports: () => call<{ reports: ReportFile[] }>("/api/mis/reports"),
+  schedule: (id: string) => call<Schedule>(`/api/mis/${id}/schedule`),
+  setSchedule: (id: string, b: { at_time: string; which_day: string; enabled: boolean }) => call<Schedule>(`/api/mis/${id}/schedule`, json(b, "PUT")),
 };

@@ -6,7 +6,7 @@ mostly found on the one side, where the key is unique.
 """
 import re
 
-from ..db import lit, q
+from ..db import parquet, q
 
 
 def _norm(name: str) -> str:
@@ -26,7 +26,7 @@ def detect(con, tables: list[dict]) -> list[dict]:
                 for cb in b["profile"]["columns"]:
                     if _norm(ca["name"]) != _norm(cb["name"]) or cb["role"] not in ("id", "entity", "dimension"):
                         continue
-                    ra, rb = f"read_parquet({lit(a['path'])})", f"read_parquet({lit(b['path'])})"
+                    ra, rb = parquet(a["path"]), parquet(b["path"])
                     rows_b, n_b, u_b = con.execute(
                         f"SELECT count(*), count({q(cb['name'])}), count(DISTINCT {q(cb['name'])}) FROM {rb}").fetchone()
                     # b must be the unique ("one") side, and a real key: filled on nearly every row
@@ -49,7 +49,7 @@ def model_sql(fact: dict, joins: list[tuple[dict, dict]]) -> str:
     """fact: table dict; joins: [(dim table dict, link)] -> SELECT joining dims onto the fact."""
     fact_cols = {c["name"].lower() for c in fact["profile"]["columns"]}
     select = ["f.*"]
-    from_ = [f"read_parquet({lit(fact['path'])}) AS f"]
+    from_ = [f"{parquet(fact['path'])} AS f"]
     for i, (dim, link) in enumerate(joins):
         alias = f"d{i}"
         for c in dim["profile"]["columns"]:
@@ -58,6 +58,6 @@ def model_sql(fact: dict, joins: list[tuple[dict, dict]]) -> str:
             out_name = c["name"] if c["name"].lower() not in fact_cols else f"{dim['name']} {c['name']}"
             fact_cols.add(out_name.lower())
             select.append(f"{alias}.{q(c['name'])} AS {q(out_name)}")
-        from_.append(f"LEFT JOIN read_parquet({lit(dim['path'])}) AS {alias}"
+        from_.append(f"LEFT JOIN {parquet(dim['path'])} AS {alias}"
                      f" ON CAST(f.{q(link['many_col'])} AS VARCHAR) = CAST({alias}.{q(link['one_col'])} AS VARCHAR)")
     return f"(SELECT {', '.join(select)} FROM {' '.join(from_)})"

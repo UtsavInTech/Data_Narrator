@@ -106,6 +106,10 @@ def write_parquet(con, rel: str, dest) -> dict:
                 expr, note = infer_varchar(con, src, name)
                 if note:
                     notes[name] = note
+            elif typ.startswith("TIMESTAMP") and con.execute(
+                    f"SELECT coalesce(bool_and(CAST({q(name)} AS TIME) = TIME '00:00:00'), false)"
+                    f" FROM (SELECT {q(name)} FROM {src} WHERE {q(name)} IS NOT NULL LIMIT {SAMPLE_ROWS})").fetchone()[0]:
+                expr = f"CAST({q(name)} AS DATE)"  # Excel stores plain dates as midnight timestamps
             exprs.append(f"{expr} AS {q(name)}" if expr else q(name))
         not_blank = " OR ".join(f"{q(name)} IS NOT NULL" for name, *_ in cols)
         con.execute(
