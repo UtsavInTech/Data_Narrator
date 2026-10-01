@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 // Typed client for the Data Narrator API. The server address is configurable so the
 // Android app can point at a company's own (on-premise or cloud) server.
 
@@ -98,6 +100,9 @@ export function setServer(url: string) {
   }
 }
 
+/** The installed app has no server of its own: the user must point it at one first. */
+export const needsServer = () => Capacitor.isNativePlatform() && !getServer();
+
 async function call<T>(path: string, init?: RequestInit, base = getServer()): Promise<T> {
   let res: Response;
   try {
@@ -114,6 +119,9 @@ async function call<T>(path: string, init?: RequestInit, base = getServer()): Pr
       /* not JSON */
     }
     throw new Error(msg);
+  }
+  if (!res.headers.get("content-type")?.includes("application/json")) {
+    throw new Error("That address isn't a Data Narrator server. Check the server address in Settings.");
   }
   return res.json();
 }

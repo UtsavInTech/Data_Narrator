@@ -37,10 +37,14 @@ Try it with the files in `samples/`. `Sharma Traders FY25.xlsx` is a deliberatel
 
 ```bash
 cd frontend
-npm run android        # builds, syncs and opens Android Studio → Run
+npm run build && npx cap sync android
+cd android && ./gradlew assembleDebug        # needs JDK 21+ and the Android SDK (ANDROID_HOME)
+# → android/app/build/outputs/apk/debug/app-debug.apk   (install: adb install -r app-debug.apk)
 ```
 
-In the app, open **Settings** and enter your server address (e.g. `http://192.168.1.20:8000`).
+Or run `npm run android` to open the project in Android Studio. On first launch the app asks for the server address, e.g. `192.168.1.20:8000` on your network, or `10.0.2.2:8000` from the Android emulator to a server on the same computer.
+
+**Databases when running in Docker:** a database on the same machine is reachable at `host.docker.internal`, not `localhost`.
 
 ## Data sources
 

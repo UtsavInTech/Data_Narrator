@@ -77,7 +77,8 @@ class UrlSource(BaseModel):
 @app.post("/api/sources/url", status_code=202)
 def connect_url(body: UrlSource):
     creds = body.model_dump(exclude={"url", "name"}, exclude_none=True)
-    label = body.name or body.url.split("?")[0].rstrip("/").rsplit("/", 1)[-1] or body.url
+    parts = [p for p in body.url.split("?")[0].rstrip("/").split("/") if p and not any(ch in p for ch in "*?[")]
+    label = body.name or (parts[-1] if len(parts) > 1 else body.url)
     ds = service.start_import(OWNER, label, "url", lambda con: sources.url_relations(con, body.url, creds))
     return {"imports": [_public(ds)]}
 

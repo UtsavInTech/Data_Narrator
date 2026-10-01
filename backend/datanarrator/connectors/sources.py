@@ -82,8 +82,11 @@ def _configure_cloud(con, url: str, creds: dict):
     if scheme in ("s3", "s3a") and creds.get("key_id"):
         parts = [f"KEY_ID {lit(creds['key_id'])}", f"SECRET {lit(creds.get('secret', ''))}",
                  f"REGION {lit(creds.get('region') or 'us-east-1')}"]
-        if creds.get("endpoint"):
-            parts += [f"ENDPOINT {lit(creds['endpoint'])}", "URL_STYLE 'path'"]
+        if creds.get("endpoint"):  # MinIO, SeaweedFS, Ceph... often plain http on-premise
+            endpoint = creds["endpoint"].strip().rstrip("/")
+            secure = not endpoint.lower().startswith("http://")
+            endpoint = re.sub(r"^https?://", "", endpoint, flags=re.I)
+            parts += [f"ENDPOINT {lit(endpoint)}", "URL_STYLE 'path'", f"USE_SSL {str(secure).lower()}"]
         con.execute(f"CREATE OR REPLACE SECRET src_s3 (TYPE s3, {', '.join(parts)})")
     elif scheme in ("gs", "gcs") and creds.get("key_id"):
         con.execute(f"CREATE OR REPLACE SECRET src_gcs (TYPE gcs, KEY_ID {lit(creds['key_id'])},"

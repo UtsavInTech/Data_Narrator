@@ -40,6 +40,8 @@ def _run_import(owner, placeholder_id, label, source_type, resolve, cleanup):
     created = []
     try:
         rels = resolve(con)
+        if len(rels) == 1 and source_type == "url":  # one remote file/folder: use the name the user gave
+            rels = [(label, *rels[0][1:])]
         for name, rel, report in rels:
             ds = catalog.create(owner, name, "table", source_type, label, status="processing")
             report = dict(report)

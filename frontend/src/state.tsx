@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, type Dataset, type Link } from "./api";
+import { api, needsServer, type Dataset, type Link } from "./api";
 
 interface State {
   datasets: Dataset[];
@@ -37,6 +37,10 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const timer = useRef<number | undefined>(undefined);
 
   const reload = useCallback(async () => {
+    if (needsServer()) {
+      setLoading(false);
+      return;
+    }
     try {
       const res = await api.datasets();
       setDatasets(res.datasets);

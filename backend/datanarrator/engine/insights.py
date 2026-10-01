@@ -14,6 +14,7 @@ from .fmt import num, pct
 from .profile import MEASURE_HINT, by_role
 
 RECORDS = {"name": "Records", "agg": "count"}
+_FLAG_VALUES = {"true", "false", "yes", "no", "y", "n", "0", "1", "(blank)"}
 MAX_MEASURES, MAX_DIMS, MAX_ENTITIES = 4, 8, 2
 
 
@@ -118,6 +119,13 @@ def breakdowns(con, rel, measures, dims) -> list[dict]:
                 if spread > 0.1:
                     details.append(f"That gap is {pct(spread)} of the typical value.")
                 score = 0.3 + min(0.5, spread * 0.5)
+            elif d.get("subtype") == "flag" or {str(l).lower() for l, _ in items} <= _FLAG_VALUES:
+                # Yes/no columns: state the split plainly instead of "true leads amount".
+                pos_total = sum(v for _, v in items if v > 0) or 1
+                share = tv / pos_total
+                summary = (f"{pct(share)} of {mname} ({num(tv)}) has {dim} = {top};"
+                           f" {pct(sv / pos_total)} ({num(sv)}) has {dim} = {sec}.")
+                score = 0.3 + min(0.3, abs(share - 0.5))
             else:
                 pos_total = sum(v for _, v in items if v > 0)
                 share = tv / pos_total if pos_total > 0 and tv > 0 else None
@@ -163,7 +171,12 @@ def trends(con, rel, measures, tcol) -> tuple[list[dict], dict, str | None]:
         return [], {}, grain
     counts = sorted(r[1] for r in rows)
     median_n = counts[len(counts) // 2]
-    partial = rows[-1][1] < 0.5 * median_n  # last period still filling up
+    # The last period is incomplete if the data stops well before it ends (e.g. data to
+    # 27 Sep for a monthly view) or it has far fewer rows than usual.
+    last_t = con.execute(f"SELECT max({texpr}) FROM {rel}").fetchone()[0]
+    period_days = {"day": 1, "week": 7, "month": 30.44, "quarter": 91.3, "year": 365.25}[grain]
+    covered = ((last_t - rows[-1][0]).total_seconds() / 86400 + 1) / period_days
+    partial = covered < 0.95 or rows[-1][1] < 0.5 * median_n
     full = rows[:-1] if partial else rows
 
     out, latest = [], {}

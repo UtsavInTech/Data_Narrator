@@ -19,11 +19,15 @@ def recommend(insights: list[dict]) -> list[dict]:
             out.append(_action("high", f"Fix negative {f['measure']} in {names}",
                                f"These {f['dimension']} values add up to {num(loss)} {f['measure']}. Review pricing,"
                                " discounts and costs there first.", ins, "loss"))
+        elif kind == "breakdown" and f["categories"] <= 3 and f.get("agg") != "avg" and f["top"].lower() in ("true", "yes", "y", "1"):
+            out.append(_action("medium", f"Follow up where {f['dimension']} = {f['bottom']}",
+                               f"{num(f['bottom_value'])} {f['measure']} has {f['dimension']} = {f['bottom']}.",
+                               ins, "flag"))
         elif kind == "breakdown" and f.get("agg") == "sum" and (f.get("top_share") or 0) >= 0.5 and f["categories"] >= 3:
             out.append(_action("medium", f"Reduce dependence on {f['top']}",
                                f"{f['top']} makes up {pct(f['top_share'])} of {f['measure']}. A problem there would hit"
                                " the whole business.", ins, "concentration"))
-        elif kind == "breakdown" and f.get("agg") == "sum" and f["categories"] >= 3 and f.get("bottom_value", 0) > 0:
+        elif kind == "breakdown" and f.get("agg") == "sum" and f["categories"] >= 3 and 0 < f.get("bottom_value", 0) < 0.5 * f["top_value"]:
             out.append(_action("low", f"Look into {f['bottom']} ({f['dimension']})",
                                f"It has the lowest {f['measure']} ({num(f['bottom_value'])}) vs {num(f['top_value'])}"
                                f" for {f['top']}. Decide whether to grow it or drop it.", ins, "laggard"))

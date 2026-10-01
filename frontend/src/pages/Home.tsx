@@ -1,6 +1,7 @@
 import { ArrowDownRight, ArrowUpRight, ChevronRight, Database, Plus } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import type { Insight } from "../api";
+import { needsServer, type Insight } from "../api";
+import { ServerCard } from "../components/ServerCard";
 import { DatasetPicker } from "../components/DatasetPicker";
 import { InsightCard } from "../components/InsightCard";
 import { Button, Card, Empty, ErrorNote, SectionTitle, Spinner } from "../components/ui";
@@ -27,6 +28,16 @@ export default function Home() {
   const nav = useNavigate();
   const busy = datasets.filter((d) => d.status === "importing" || d.status === "processing");
 
+  if (needsServer()) {
+    return (
+      <div className="pt-6">
+        <img src="/icon.svg" alt="" className="w-14 h-14 mb-5" />
+        <h1 className="text-[26px] font-semibold tracking-tight leading-tight">Welcome to Data Narrator</h1>
+        <p className="text-[16px] text-mute mt-2 mb-6">Connect to your company's server to see your data.</p>
+        <ServerCard onConnected={() => nav("/")} />
+      </div>
+    );
+  }
   if (loading) return <Spinner />;
   if (error) return <div className="pt-6"><ErrorNote message={error} /></div>;
   if (!current) {
