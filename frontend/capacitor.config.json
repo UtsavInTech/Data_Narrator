@@ -1,0 +1,7 @@
+{
+  "appId": "org.datanarrator.app",
+  "appName": "Data Narrator",
+  "webDir": "dist",
+  "android": { "allowMixedContent": true },
+  "server": { "androidScheme": "https", "cleartext": true }
+}

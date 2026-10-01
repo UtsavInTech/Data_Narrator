@@ -23,3 +23,5 @@ backend/storage/
 .idea/
 .vscode/
 .env
+frontend/android/local.properties
+frontend/android/app/src/main/assets/public/
