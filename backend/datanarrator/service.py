@@ -34,6 +34,7 @@ def start_import(owner: str, label: str, source_type: str, resolve, cleanup: lis
     `resolve(con)` returns [(name, relation_sql, report)] from connectors.sources.
     """
     placeholder = catalog.create(owner, label, "import", source_type, label, status="importing")
+    catalog.update(placeholder["id"], stage="uploaded")
     _pool.submit(_run_import, owner, placeholder["id"], label, source_type, resolve, list(cleanup),
                  file_hash, user, on_table)
     return placeholder
@@ -44,7 +45,9 @@ def _run_import(owner, placeholder_id, label, source_type, resolve, cleanup, fil
     con = connect()
     created, touched = [], []
     try:
+        catalog.update(placeholder_id, stage="reading")
         rels = resolve(con)
+        catalog.update(placeholder_id, stage="cleaning")
         if len(rels) == 1 and source_type == "url":  # one remote file/folder: use the name the user gave
             rels = [(label, *rels[0][1:])]
         for name, rel, report in rels:
@@ -137,17 +140,18 @@ def analyze(ds_id: str):
     ds = catalog.get(ds_id)
     if not ds:
         return
-    catalog.update(ds_id, status="processing", error=None)
+    catalog.update(ds_id, status="processing", error=None, stage="profiling")
     con = connect()
     try:
         rel = relation(ds)
         rows = con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0]
         prof = profile.profile(con, rel, rows)
+        catalog.update(ds_id, stage="insights")
         result = insights.generate(con, rel, prof)
         result["actions"] = actions.recommend(result["insights"])
         catalog.save_json(ds_id, "profile", prof)
         catalog.save_json(ds_id, "insights", result)
-        catalog.update(ds_id, status="ready", row_count=rows, column_count=len(prof["columns"]))
+        catalog.update(ds_id, status="ready", stage=None, row_count=rows, column_count=len(prof["columns"]))
     except Exception as e:
         log.error("analysis failed for %s: %s", ds_id, traceback.format_exc())
         catalog.update(ds_id, status="error", error=_friendly(e))

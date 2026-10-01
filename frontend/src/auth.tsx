@@ -29,7 +29,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const st = await api.authStatus();
       setSetupNeeded(st.setup_needed);
-      setUser(getToken() && !st.setup_needed ? (await api.me()).user : null);
+      let me: User | null = null;
+      if (getToken() && !st.setup_needed) {
+        // An old or expired session just means "log in again", not an error.
+        me = await api.me().then((r) => r.user).catch(() => { setToken(null); return null; });
+      }
+      setUser(me);
       setError(null);
     } catch (e) {
       setUser(null);

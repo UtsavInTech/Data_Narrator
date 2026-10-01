@@ -100,7 +100,7 @@ def test_months_as_columns_are_unpivoted(messy_workbook):
 
 
 def test_identical_sheets_are_stacked(messy_workbook):
-    t = messy_workbook["Jan + 2 more"]
+    t = messy_workbook["Jan and 2 similar sheets"]
     assert len(t.frame) == 9
     assert sorted(t.frame["Sheet"].unique()) == ["Feb", "Jan", "Mar"]
 

@@ -8,6 +8,7 @@ hidden sheets, defined Excel Tables, and identical sheets per month/region
 (stacked into one table). Every decision is recorded in a per-table report.
 """
 import datetime as dt
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -475,5 +476,7 @@ def _stack_identical(tables: list[ParsedTable]) -> list[ParsedTable]:
             "parts": [t.report for t in group],
             "rows": len(stacked), "columns": len(stacked.columns),
         }
-        out.append(ParsedTable(name=f"{group[0].name} + {len(group) - 1} more", frame=stacked, report=report))
+        prefix = os.path.commonprefix(names).strip(" -_(")
+        name = f"{prefix} ({len(group)} sheets)" if len(prefix) >= 3 else f"{group[0].name} and {len(group) - 1} similar sheets"
+        out.append(ParsedTable(name=name, frame=stacked, report=report))
     return out

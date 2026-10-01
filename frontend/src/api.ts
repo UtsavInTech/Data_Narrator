@@ -14,6 +14,7 @@ export interface Dataset {
   row_count: number | null;
   column_count: number | null;
   status: Status;
+  stage?: string | null;
   error: string | null;
   created_at: number;
   updated_at: number;
@@ -82,6 +83,8 @@ export interface Insight {
   narrative: string;
   score: number;
   chart: Chart | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  facts: Record<string, any>;
 }
 
 export interface Kpi { label: string; value: number | null; display: string; agg: string; delta: number | null; period: string | null }

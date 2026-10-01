@@ -62,6 +62,9 @@ def init():
     with _lock, _conn() as con:
         con.executescript(SCHEMA)
         con.execute("PRAGMA journal_mode=WAL")
+        cols = {r[1] for r in con.execute("PRAGMA table_info(datasets)").fetchall()}
+        if "stage" not in cols:  # what the app shows while a table is being prepared
+            con.execute("ALTER TABLE datasets ADD COLUMN stage TEXT")
     _migrate_single_files()
 
 

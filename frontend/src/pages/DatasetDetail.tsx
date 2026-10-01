@@ -1,21 +1,29 @@
-import { ArrowLeft, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type Column, type DatasetDetail as Detail } from "../api";
-import { Button, Card, ErrorNote, Sheet, Spinner, StatusBadge } from "../components/ui";
+import { Button, ErrorNote, PageHeader, Panel, Section, Segmented, Sheet, Spinner, Stepper } from "../components/ui";
 import { useData } from "../state";
 
-const ROLE: Record<Column["role"], [string, string]> = {
-  measure: ["Number", "Values we add up or average"],
-  dimension: ["Category", "Groups to compare"],
-  time: ["Date", "Used for trends"],
-  entity: ["Name", "Customers, products… used for top lists"],
-  id: ["ID / key", "Links tables together"],
-  text: ["Text", "Free text, not charted"],
-  empty: ["Empty", "No values"],
-  constant: ["Same value", "Only one value"],
-  other: ["Other", ""],
+const ROLE: Record<Column["role"], string> = {
+  measure: "Number", dimension: "Category", time: "Date", entity: "Name", id: "ID / key",
+  text: "Free text", empty: "Empty", constant: "Same everywhere", other: "Other",
 };
+
+const n = (v: string | null) => (v == null || isNaN(Number(v)) ? v ?? "–" : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 }));
+const day = (v: string | null) => {
+  const t = v ? new Date(String(v).replace(" ", "T")) : null;
+  return t && !isNaN(t.getTime()) ? t.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : v ?? "–";
+};
+
+function describe(c: Column) {
+  if (c.role === "measure") return `${c.agg === "avg" ? "Averaged" : "Added up"} · ${n(c.min)} to ${n(c.max)}`;
+  if (c.role === "time") return c.subtype === "year" ? `${c.min} to ${c.max}` : `${day(c.min)} to ${day(c.max)}`;
+  if (c.role === "dimension" || c.role === "entity") return `${c.unique.toLocaleString()} different values`;
+  if (c.role === "id") return "Used to link tables";
+  return "";
+}
+
+type Tab = "overview" | "columns" | "history" | "preview";
 
 export default function DatasetDetail() {
   const { id = "" } = useParams();
@@ -23,6 +31,7 @@ export default function DatasetDetail() {
   const ds = datasets.find((d) => d.id === id);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [preview, setPreview] = useState<{ columns: string[]; rows: Record<string, unknown>[] } | null>(null);
+  const [tab, setTab] = useState<Tab>("overview");
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -30,8 +39,22 @@ export default function DatasetDetail() {
 
   useEffect(() => {
     api.dataset(id).then(setDetail).catch((e: Error) => setError(e.message));
-    api.preview(id, 20).then(setPreview).catch(() => setPreview(null));
   }, [id, ds?.updated_at]);
+  useEffect(() => {
+    if (tab === "preview" && !preview) api.preview(id, 50).then(setPreview).catch(() => setPreview({ columns: [], rows: [] }));
+  }, [tab, id, preview]);
+
+  const back = { to: "/data", label: "Data" };
+  if (error) return <><PageHeader title="Table" back={back} /><ErrorNote message={error} /></>;
+  if (!detail) return <Spinner />;
+
+  const d = detail.dataset;
+  const working = ds && (ds.status === "importing" || ds.status === "processing");
+  const rep = detail.import_report;
+  const parts = rep?.parts ?? (rep ? [rep] : []);
+  const nameOf = (tid: string) => datasets.find((x) => x.id === tid)?.name ?? "table";
+  const notes = parts.flatMap((p) => p.notes ?? []);
+  const conversions = Object.entries(rep?.conversions ?? {});
 
   const remove = async () => {
     setBusy(true);
@@ -45,139 +68,124 @@ export default function DatasetDetail() {
     }
   };
 
-  const refresh = async () => {
-    await api.refresh(id);
-    await reload();
-  };
-
-  const rep = detail?.import_report;
-  const parts = rep?.parts ?? (rep ? [rep] : []);
-  const nameOf = (tid: string) => datasets.find((d) => d.id === tid)?.name ?? "table";
-  const groups = (["measure", "time", "dimension", "entity", "id", "text", "empty", "constant", "other"] as const)
-    .map((r) => [r, detail?.profile?.columns.filter((c) => c.role === r) ?? []] as const)
-    .filter(([, cols]) => cols.length);
-
   return (
     <>
-      <button type="button" onClick={() => nav("/data")} className="flex items-center gap-1.5 min-h-11 -ml-1 text-[16px] text-ink-2 mb-2">
-        <ArrowLeft size={20} /> Your data
-      </button>
-      {error && <ErrorNote message={error} />}
-      {!detail && !error && <Spinner />}
-      {detail && (
+      <PageHeader back={back} title={d.name}
+        description={<span className="num">{d.row_count?.toLocaleString()} rows · {d.column_count} columns · {d.kind === "model" ? "combined automatically" : d.source_label}</span>}
+        actions={<>
+          <Button variant="secondary" onClick={() => { select(id); nav("/insights"); }} disabled={ds?.status !== "ready"}>View insights</Button>
+          <Button variant="ghost" onClick={async () => { await api.refresh(id); await reload(); }}>Re-analyse</Button>
+        </>} />
+
+      {working && <Panel className="p-5 mb-8 max-w-md"><Stepper status={ds!.status} stage={ds!.stage} /></Panel>}
+      {d.error && <div className="mb-8"><ErrorNote message={d.error} /></div>}
+
+      <div className="mb-6">
+        <Segmented<Tab> value={tab} onChange={setTab} options={[
+          { value: "overview", label: "Overview" }, { value: "columns", label: "Columns" },
+          ...(detail.batches.length ? [{ value: "history" as Tab, label: "History" }] : []), { value: "preview", label: "Preview" },
+        ]} />
+      </div>
+
+      {tab === "overview" && (
         <>
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="text-[26px] font-semibold tracking-tight leading-tight">{detail.dataset.name}</h1>
-            <StatusBadge status={ds?.status ?? detail.dataset.status} />
-          </div>
-          <p className="text-[15px] text-mute mt-1">
-            {detail.dataset.row_count?.toLocaleString()} rows · {detail.dataset.column_count} columns · {detail.dataset.source_label}
-          </p>
-          {detail.dataset.error && <div className="mt-3"><ErrorNote message={detail.dataset.error} /></div>}
-
-          <div className="flex gap-2 mt-5">
-            <Button onClick={() => { select(id); nav("/"); }} disabled={ds?.status !== "ready"}>See insights</Button>
-            <Button variant="secondary" onClick={refresh} aria-label="Re-analyse"><RefreshCw size={18} /></Button>
-            <Button variant="danger" onClick={() => setConfirm(true)} aria-label="Delete"><Trash2 size={18} /></Button>
-          </div>
-
           {detail.model && (
-            <Card className="p-4 mt-6">
-              <h2 className="text-[17px] font-semibold mb-2">How these tables connect</h2>
-              {detail.model.links.map((l, i) => (
-                <p key={i} className="text-[15px] text-ink-2 py-1">
-                  <b>{nameOf(l.many)}</b> → <b>{nameOf(l.one)}</b> on “{l.many_col}” ({Math.round(l.coverage * 100)}% matched)
-                </p>
-              ))}
-            </Card>
-          )}
-
-          {parts.length > 0 && (parts.some((p) => p.notes?.length || p.sheet) || Object.keys(rep?.conversions ?? {}).length > 0) && (
-            <Card className="p-4 mt-4">
-              <h2 className="text-[17px] font-semibold mb-2">How we read it</h2>
-              {parts.map((p, i) => (
-                <div key={i} className="py-1.5">
-                  {p.sheet && (
-                    <div className="text-[15px] font-medium">
-                      Sheet “{p.sheet}” · {p.range}{p.header_row ? ` · header on row ${p.header_row}` : ""}
-                    </div>
-                  )}
-                  <ul className="text-[15px] text-ink-2 list-disc pl-5 mt-0.5">
-                    {p.notes?.map((n) => <li key={n}>{n}</li>)}
-                  </ul>
-                </div>
-              ))}
-              {rep?.blank_rows_removed ? <p className="text-[15px] text-ink-2">Removed {rep.blank_rows_removed} blank rows.</p> : null}
-              {Object.entries(rep?.conversions ?? {}).map(([c, n]) => (
-                <p key={c} className="text-[15px] text-ink-2">“{c}”: {n}</p>
-              ))}
-            </Card>
-          )}
-
-          {groups.length > 0 && (
-            <>
-              <h2 className="text-[18px] font-semibold mt-8 mb-1">What we found in each column</h2>
-              <p className="text-[14px] text-mute mb-3">Worked out automatically from the values. No setup needed.</p>
-              <div className="grid sm:grid-cols-2 gap-3">
-                {groups.map(([role, cols]) => (
-                  <Card key={role} className="p-4">
-                    <div className="text-[15px] font-semibold">{ROLE[role][0]} <span className="text-mute font-normal">· {cols.length}</span></div>
-                    <div className="text-[13px] text-mute mb-2">{ROLE[role][1]}</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {cols.map((c) => (
-                        <span key={c.name} className="text-[14px] px-2.5 py-1 rounded-lg bg-canvas" title={`${c.type}, ${c.unique} distinct, ${c.null_pct}% empty`}>
-                          {c.name}{c.agg ? <span className="text-mute"> · {c.agg === "avg" ? "average" : "total"}</span> : null}
-                        </span>
-                      ))}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </>
-          )}
-
-          {detail.batches.length > 0 && (
-            <>
-              <h2 className="text-[18px] font-semibold mt-8 mb-3">History</h2>
-              <Card className="divide-y divide-line">
-                {detail.batches.slice(0, 20).map((b) => (
-                  <div key={b.id} className="flex items-center gap-3 px-4 min-h-14 text-[15px]">
-                    <span className="flex-1 min-w-0 truncate">{b.kind === "entry" ? "Entered" : "Imported"} · {b.source}</span>
-                    <span className="text-mute text-[13px] text-right">{b.rows.toLocaleString()} rows{b.created_by ? ` · ${b.created_by}` : ""}<br />{new Date(b.created_at * 1000).toLocaleString()}</span>
+            <Section title="How these tables connect">
+              <Panel className="divide-y divide-line">
+                {detail.model.links.map((l, i) => (
+                  <div key={i} className="px-5 py-4 text-[14px]">
+                    <b className="font-medium">{nameOf(l.many)}</b> <span className="text-mute">is linked to</span> <b className="font-medium">{nameOf(l.one)}</b>
+                    <span className="text-mute"> through “{l.many_col}” · {Math.round(l.coverage * 100)}% of values match</span>
                   </div>
                 ))}
-              </Card>
-            </>
+              </Panel>
+            </Section>
           )}
-
-          {preview && preview.rows.length > 0 && (
-            <>
-              <h2 className="text-[18px] font-semibold mt-8 mb-3">Preview</h2>
-              <Card className="overflow-x-auto">
-                <table className="text-[14px] whitespace-nowrap">
-                  <thead>
-                    <tr className="bg-canvas text-left text-mute">
-                      {preview.columns.map((c) => <th key={c} className="font-medium px-3 py-2.5">{c}</th>)}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.rows.map((r, i) => (
-                      <tr key={i} className="border-t border-line">
-                        {preview.columns.map((c) => <td key={c} className="px-3 py-2 tabular">{r[c] == null ? <span className="text-zinc-300">—</span> : String(r[c])}</td>)}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Card>
-            </>
+          {(notes.length > 0 || conversions.length > 0 || rep?.blank_rows_removed) && (
+            <Section title="How we read it">
+              <Panel className="p-5">
+                {parts.filter((p) => p.sheet).map((p, i) => (
+                  <p key={i} className="text-[14px] text-mute mb-2">Sheet “{p.sheet}”{p.range && p.range !== "multiple" ? ` · cells ${p.range}` : ""}{p.header_row ? ` · headings on row ${p.header_row}` : ""}</p>
+                ))}
+                <ul className="text-[14px] text-ink-2 space-y-1.5 list-disc pl-5">
+                  {notes.map((n, i) => <li key={i}>{n.charAt(0).toUpperCase() + n.slice(1)}</li>)}
+                  {rep?.blank_rows_removed ? <li>Removed {rep.blank_rows_removed} blank rows</li> : null}
+                  {conversions.map(([c, n]) => <li key={c}>“{c}”: {n}</li>)}
+                </ul>
+              </Panel>
+            </Section>
+          )}
+          {!detail.model && !notes.length && !conversions.length && (
+            <p className="text-[14px] text-mute mb-10">The file was clean: nothing needed fixing.</p>
+          )}
+          {d.kind === "table" && (
+            <Section title="Remove">
+              <p className="text-[14px] text-mute mb-3">Deletes this table and its insights from this server. Your original file or database isn't touched.</p>
+              <Button variant="danger" onClick={() => setConfirm(true)}>Delete table</Button>
+            </Section>
           )}
         </>
       )}
-      <Sheet open={confirm} onClose={() => setConfirm(false)} title="Delete this data?">
-        <p className="text-[15px] text-ink-2 mb-5">Removes “{detail?.dataset.name}” and its insights from this server. Your original file or database is not touched.</p>
+
+      {tab === "columns" && detail.profile && (
+        <Panel className="overflow-x-auto">
+          <table className="w-full text-[14px]">
+            <thead>
+              <tr className="text-left text-[12px] text-mute">
+                <th className="font-medium px-5 py-3">Column</th><th className="font-medium px-5 py-3">Understood as</th>
+                <th className="font-medium px-5 py-3">Details</th><th className="font-medium px-5 py-3 text-right">Empty</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detail.profile.columns.map((c) => (
+                <tr key={c.name} className="border-t border-line">
+                  <td className="px-5 py-3 font-medium">{c.name}</td>
+                  <td className="px-5 py-3">{ROLE[c.role]}</td>
+                  <td className="px-5 py-3 text-mute num">{describe(c)}</td>
+                  <td className="px-5 py-3 text-right num text-mute">{c.null_pct ? `${c.null_pct}%` : "–"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Panel>
+      )}
+
+      {tab === "history" && (
+        <Panel className="divide-y divide-line">
+          {detail.batches.map((b) => (
+            <div key={b.id} className="flex items-center gap-4 px-5 py-3.5 text-[14px]">
+              <span className="flex-1 min-w-0">
+                <span className="block font-medium">{b.kind === "entry" ? "Entered in the app" : "Imported"}</span>
+                <span className="block text-[13px] text-mute truncate">{b.source}{b.created_by ? ` · by ${b.created_by}` : ""}</span>
+              </span>
+              <span className="text-right text-[13px] text-mute num">+{b.rows.toLocaleString()} rows<br />{new Date(b.created_at * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>
+            </div>
+          ))}
+        </Panel>
+      )}
+
+      {tab === "preview" && (
+        !preview ? <Spinner /> : (
+          <Panel className="overflow-x-auto">
+            <table className="text-[13px] whitespace-nowrap">
+              <thead><tr className="text-left text-mute">{preview.columns.map((c) => <th key={c} className="font-medium px-4 py-3">{c}</th>)}</tr></thead>
+              <tbody>
+                {preview.rows.map((r, i) => (
+                  <tr key={i} className="border-t border-line">
+                    {preview.columns.map((c) => <td key={c} className="px-4 py-2.5 num">{r[c] == null ? <span className="text-faint">–</span> : String(r[c])}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        )
+      )}
+
+      <Sheet open={confirm} onClose={() => setConfirm(false)} title="Delete this table?">
+        <p className="text-[15px] text-ink-2 mb-5">“{d.name}” and its insights are removed from Data Narrator. Your original file or database is not touched.</p>
         <div className="flex gap-2">
           <Button variant="secondary" className="flex-1" onClick={() => setConfirm(false)}>Cancel</Button>
-          <Button className="flex-1 bg-bad! active:bg-red-800!" busy={busy} onClick={remove}>Delete</Button>
+          <Button className="flex-1 bg-bad! hover:bg-bad/90!" busy={busy} onClick={remove}>Delete</Button>
         </div>
       </Sheet>
     </>

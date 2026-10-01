@@ -1,33 +1,64 @@
 @import "tailwindcss";
 
+/* Data Narrator: a calm, precise business tool. Warm paper neutrals, ink for
+   emphasis, colour only for meaning (up / down / needs attention). */
 @theme {
-  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
-  --color-ink: #18181b;
-  --color-ink-2: #3f3f46;
-  --color-mute: #71717a;
-  --color-line: #e4e4e7;
-  --color-canvas: #f4f4f5;
-  --color-surface: #ffffff;
-  --color-good: #15803d;
-  --color-bad: #b91c1c;
-  --color-warn: #a16207;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+
+  --color-paper: #f7f6f3;     /* page */
+  --color-surface: #ffffff;   /* raised areas */
+  --color-sunken: #f1f0ec;    /* wells, hover, inputs at rest */
+  --color-ink: #1c1b19;       /* primary text, primary actions, key data */
+  --color-ink-2: #44423e;     /* secondary text */
+  --color-mute: #7a776f;      /* labels, meta */
+  --color-faint: #a8a59c;     /* placeholders, axis */
+  --color-line: #e6e3dc;      /* hairlines */
+  --color-line-2: #d6d2c8;    /* stronger borders */
+
+  --color-good: #2f6f4e;
+  --color-good-bg: #eaf3ed;
+  --color-bad: #b42318;
+  --color-bad-bg: #fbeceb;
+  --color-warn: #a15c07;
+  --color-warn-bg: #fdf3e2;
+
+  --radius-ui: 10px;
 }
 
 html, body, #root { height: 100%; }
 body {
   margin: 0;
-  background: var(--color-canvas);
+  background: var(--color-paper);
   color: var(--color-ink);
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: none;
 }
 button, a, [role="button"] { -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; border-radius: 6px; }
+
 .pt-safe { padding-top: env(safe-area-inset-top); }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-.tabular { font-variant-numeric: tabular-nums; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
 .recharts-wrapper *:focus { outline: none; }
+
+/* Eyebrow labels above sections and figures */
+.label { font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-mute); }
+
+@keyframes dn-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .35 } }
+.pulse { animation: dn-pulse 1.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .pulse, .animate-spin { animation: none !important; } }
+
+/* Native selects, styled to match text inputs */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237a776f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.25rem !important;
+}

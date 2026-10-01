@@ -1,104 +1,130 @@
-import { ClipboardList, Database, FileDown, FileSpreadsheet, Home, Lightbulb, Settings, UserCircle2 } from "lucide-react";
+import { ClipboardList, Database, FileSpreadsheet, Home, Lightbulb, LogOut, Settings } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { api, fileUrl, type MisTable, type Role } from "../api";
 import { useAuth } from "../auth";
+import { Sheet } from "./ui";
 
 type Item = { to: string; label: string; icon: typeof Home; end?: boolean };
 
 /** What each role sees. Kept short on purpose. */
 export const NAV: Record<Role, Item[]> = {
   admin: [
-    { to: "/", label: "Home", icon: Home, end: true },
+    { to: "/", label: "Overview", icon: Home, end: true },
     { to: "/insights", label: "Insights", icon: Lightbulb },
     { to: "/entry", label: "Entry", icon: ClipboardList },
     { to: "/reports", label: "Reports", icon: FileSpreadsheet },
     { to: "/data", label: "Data", icon: Database },
   ],
   manager: [
-    { to: "/", label: "Home", icon: Home, end: true },
+    { to: "/", label: "Overview", icon: Home, end: true },
     { to: "/insights", label: "Insights", icon: Lightbulb },
     { to: "/reports", label: "Reports", icon: FileSpreadsheet },
   ],
   operator: [{ to: "/entry", label: "Entry", icon: ClipboardList }],
 };
 
-const ROLE_LABEL: Record<Role, string> = { admin: "Admin", manager: "Manager", operator: "Data entry" };
+export const ROLE_LABEL: Record<Role, string> = { admin: "Admin", manager: "Manager", operator: "Data entry" };
 
-function Footer() {
+const initials = (name: string) => name.split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+
+/** Pages always open at the top. */
+function ScrollTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+  return null;
+}
+
+function Templates() {
+  const [open, setOpen] = useState(false);
   const [tables, setTables] = useState<MisTable[]>([]);
   useEffect(() => {
-    api.misTables().then((r) => setTables(r.tables)).catch(() => setTables([]));
-  }, []);
-  if (!tables.length) return null;
+    if (open) api.misTables().then((r) => setTables(r.tables)).catch(() => setTables([]));
+  }, [open]);
   return (
-    <footer className="mt-14 pt-6 border-t border-line">
-      <h2 className="text-[14px] font-semibold text-ink-2 flex items-center gap-2"><FileDown size={16} /> Templates</h2>
-      <p className="text-[13px] text-mute mt-0.5 mb-3">Blank Excel sheets with the right columns and dropdowns. Fill one in and upload it from Entry.</p>
-      <div className="flex flex-wrap gap-2">
-        {tables.map((t) => (
-          <a key={t.id} href={fileUrl(`/api/mis/${t.id}/template.xlsx`)} className="inline-flex items-center gap-2 min-h-10 px-3 rounded-lg bg-surface border border-line text-[14px]">
-            <FileSpreadsheet size={16} className="text-ink-2" /> {t.name}
-          </a>
-        ))}
-      </div>
-    </footer>
+    <>
+      <footer className="mt-16 pt-5 border-t border-line flex flex-wrap items-center justify-between gap-3 text-[13px] text-mute">
+        <span>Data Narrator</span>
+        <button type="button" onClick={() => setOpen(true)} className="inline-flex items-center gap-1.5 hover:text-ink min-h-9">
+          <FileSpreadsheet size={15} /> Excel templates
+        </button>
+      </footer>
+      <Sheet open={open} onClose={() => setOpen(false)} title="Excel templates">
+        <p className="text-[14px] text-mute mb-3">Blank sheets with the right columns and dropdowns. Fill one in and upload it from Entry; it is added to the same table.</p>
+        <div className="-mx-2">
+          {tables.map((t) => (
+            <a key={t.id} href={fileUrl(`/api/mis/${t.id}/template.xlsx`)} className="flex items-center gap-3 px-2 py-3 rounded-[10px] hover:bg-sunken">
+              <FileSpreadsheet size={18} className="text-mute shrink-0" />
+              <span className="flex-1 truncate text-[15px]">{t.name}</span>
+              <span className="text-[13px] text-mute">.xlsx</span>
+            </a>
+          ))}
+          {!tables.length && <p className="px-2 text-[14px] text-mute">No tables yet.</p>}
+        </div>
+      </Sheet>
+    </>
   );
 }
 
 export function Shell({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const items = NAV[user!.role];
   return (
     <div className="min-h-full lg:flex">
-      <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 h-screen sticky top-0 bg-surface border-r border-line px-4 py-6">
-        <div className="flex items-center gap-2.5 px-2 mb-8">
-          <img src="/icon.svg" alt="" className="w-9 h-9" />
-          <span className="text-[18px] font-semibold tracking-tight">Data Narrator</span>
+      <ScrollTop />
+      <aside className="hidden lg:flex lg:flex-col w-60 shrink-0 h-screen sticky top-0 border-r border-line bg-surface">
+        <div className="flex items-center gap-2.5 px-5 h-16">
+          <img src="/icon.svg" alt="" className="w-7 h-7" />
+          <span className="text-[16px] font-semibold tracking-tight">Data Narrator</span>
         </div>
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-col gap-0.5 px-3 mt-2">
           {[...items, { to: "/settings", label: "Settings", icon: Settings }].map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end}
-              className={({ isActive }) => `flex items-center gap-3 min-h-12 px-3 rounded-xl text-[16px] ${isActive ? "bg-ink text-white" : "text-ink-2 hover:bg-canvas"}`}>
-              <Icon size={20} /> {label}
+              className={({ isActive }) => `flex items-center gap-3 h-10 px-3 rounded-[8px] text-[14px] ${isActive ? "bg-sunken text-ink font-medium" : "text-ink-2 hover:bg-sunken/60"}`}>
+              {({ isActive }) => <><Icon size={18} strokeWidth={isActive ? 2.2 : 1.8} /> {label}</>}
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto px-3 py-3 rounded-xl bg-canvas">
-          <div className="text-[15px] font-medium truncate">{user!.name}</div>
-          <div className="text-[13px] text-mute">{user!.employee_id} · {ROLE_LABEL[user!.role]}</div>
+        <div className="mt-auto border-t border-line p-3 flex items-center gap-3">
+          <span className="w-9 h-9 rounded-full bg-sunken text-ink-2 text-[13px] font-semibold flex items-center justify-center shrink-0">{initials(user!.name)}</span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[14px] font-medium truncate">{user!.name}</span>
+            <span className="block text-[12px] text-mute">{ROLE_LABEL[user!.role]} · {user!.employee_id}</span>
+          </span>
+          <button type="button" onClick={logout} className="w-9 h-9 flex items-center justify-center rounded-[8px] text-mute hover:text-ink hover:bg-sunken" aria-label="Log out">
+            <LogOut size={17} />
+          </button>
         </div>
       </aside>
 
-      <main className={`flex-1 min-w-0 pt-safe lg:pb-10 ${items.length > 1 ? "pb-28" : "pb-10"}`}>
-        {/* Phone top bar: name + account */}
-        <div className="lg:hidden flex items-center justify-between px-4 h-14 bg-surface border-b border-line">
-          <div className="flex items-center gap-2">
-            <img src="/icon.svg" alt="" className="w-7 h-7" />
-            <span className="text-[16px] font-semibold">Data Narrator</span>
+      <main className={`flex-1 min-w-0 lg:pb-10 ${items.length > 1 ? "pb-24" : "pb-8"}`}>
+        <div className="lg:hidden sticky top-0 z-30 bg-paper/90 backdrop-blur border-b border-line pt-safe">
+          <div className="flex items-center justify-between px-4 h-14">
+            <span className="flex items-center gap-2">
+              <img src="/icon.svg" alt="" className="w-6 h-6" />
+              <span className="text-[15px] font-semibold tracking-tight">Data Narrator</span>
+            </span>
+            <Link to="/settings" aria-label="Account and settings"
+              className="w-9 h-9 rounded-full bg-surface border border-line text-ink-2 text-[12px] font-semibold flex items-center justify-center">
+              {initials(user!.name)}
+            </Link>
           </div>
-          <Link to="/settings" className="flex items-center gap-2 min-h-11 pl-2 text-[14px] text-ink-2" aria-label="Account and settings">
-            <span className="max-w-28 truncate">{user!.name}</span> <UserCircle2 size={26} />
-          </Link>
         </div>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-10 pt-5 lg:pt-10">
+        <div className="max-w-[1080px] mx-auto px-4 sm:px-8 lg:px-12 pt-7 lg:pt-12">
           {children}
-          <Footer />
+          <Templates />
         </div>
       </main>
 
       {items.length > 1 && (
-        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-surface/95 backdrop-blur border-t border-line pb-safe">
+        <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-surface border-t border-line pb-safe">
           <div className="grid" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
             {items.map(({ to, label, icon: Icon, end }) => (
               <NavLink key={to} to={to} end={end}
-                className={({ isActive }) => `flex flex-col items-center justify-center gap-1 min-h-16 text-[12px] font-medium ${isActive ? "text-ink" : "text-zinc-400"}`}>
-                {({ isActive }) => (
-                  <>
-                    <span className={`px-4 py-1 rounded-full ${isActive ? "bg-zinc-200" : ""}`}><Icon size={22} strokeWidth={isActive ? 2.4 : 2} /></span>
-                    {label}
-                  </>
-                )}
+                className={({ isActive }) => `flex flex-col items-center justify-center gap-1 h-16 text-[11px] ${isActive ? "text-ink font-medium" : "text-faint"}`}>
+                {({ isActive }) => <><Icon size={21} strokeWidth={isActive ? 2.2 : 1.8} />{label}</>}
               </NavLink>
             ))}
           </div>

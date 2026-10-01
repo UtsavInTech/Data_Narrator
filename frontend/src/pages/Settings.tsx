@@ -1,26 +1,25 @@
-import { LogOut, UserPlus } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import { api, type Role, type User } from "../api";
+import { api, needsServer, type Role, type User } from "../api";
 import { useAuth } from "../auth";
 import { ServerCard } from "../components/ServerCard";
-import { Button, Card, ErrorNote, Field, inputCls, PageTitle, Sheet } from "../components/ui";
+import { ROLE_LABEL } from "../components/Shell";
+import { Button, ErrorNote, Field, inputCls, PageHeader, Panel, Section, Sheet } from "../components/ui";
+import { Capacitor } from "@capacitor/core";
 
-const ROLES: { value: Role; label: string; text: string }[] = [
-  { value: "operator", label: "Data entry", text: "Enters and uploads data" },
-  { value: "manager", label: "Manager", text: "Sees insights and daily reports" },
-  { value: "admin", label: "Admin", text: "Everything, including data sources and users" },
+const ROLES: { value: Role; text: string }[] = [
+  { value: "operator", text: "Enters and uploads data" },
+  { value: "manager", text: "Sees insights and daily reports" },
+  { value: "admin", text: "Everything, including data sources and employees" },
 ];
 
-function Users() {
+function Employees() {
   const { user: me } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [open, setOpen] = useState(false);
   const [v, setV] = useState({ employee_id: "", name: "", password: "", role: "operator" as Role });
   const [error, setError] = useState<string | null>(null);
   const load = () => api.users().then((r) => setUsers(r.users)).catch((e: Error) => setError(e.message));
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
@@ -36,41 +35,43 @@ function Users() {
   };
 
   return (
-    <Card className="p-5 max-w-xl mt-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[17px] font-semibold">Employees</h2>
-        <Button variant="secondary" className="px-4! min-h-10!" onClick={() => setOpen(true)}><UserPlus size={18} /> Add</Button>
-      </div>
+    <Section title="Employees" action={<Button variant="secondary" className="min-h-9! text-[14px]!" onClick={() => setOpen(true)}>Add employee</Button>}>
       {error && !open && <div className="mb-3"><ErrorNote message={error} /></div>}
-      <div className="divide-y divide-line">
+      <Panel className="divide-y divide-line overflow-hidden">
         {users.map((u) => (
-          <div key={u.employee_id} className="flex items-center gap-3 py-3">
+          <div key={u.employee_id} className="flex items-center gap-3 px-5 py-3">
             <span className="flex-1 min-w-0">
-              <span className={`block text-[15px] font-medium truncate ${u.active ? "" : "text-mute line-through"}`}>{u.name}</span>
+              <span className={`block text-[14px] font-medium truncate ${u.active ? "" : "text-faint line-through"}`}>{u.name}</span>
               <span className="block text-[13px] text-mute">{u.employee_id}</span>
             </span>
-            <select className="min-h-10 px-2 rounded-lg border border-line bg-surface text-[14px]" value={u.role}
-              disabled={u.employee_id === me!.employee_id}
-              onChange={(e) => api.editUser(u.employee_id, { role: e.target.value as Role }).then(load).catch((er: Error) => setError(er.message))}>
-              {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+            <select className="min-h-9 px-2.5 rounded-[8px] border border-line-2 bg-surface text-[13px]" value={u.role} disabled={u.employee_id === me!.employee_id}
+              onChange={(e) => api.editUser(u.employee_id, { role: e.target.value as Role }).then(load).catch((er: Error) => setError(er.message))}
+              aria-label={`Role for ${u.name}`}>
+              {ROLES.map((r) => <option key={r.value} value={r.value}>{ROLE_LABEL[r.value]}</option>)}
             </select>
             {u.employee_id !== me!.employee_id && (
-              <button type="button" className="text-[14px] text-ink-2 min-h-10 px-2"
-                onClick={() => api.editUser(u.employee_id, { active: !u.active }).then(load)}>{u.active ? "Disable" : "Enable"}</button>
+              <button type="button" className="text-[13px] text-mute hover:text-ink min-h-9 px-2" onClick={() => api.editUser(u.employee_id, { active: !u.active }).then(load)}>
+                {u.active ? "Disable" : "Enable"}
+              </button>
             )}
           </div>
         ))}
-      </div>
+      </Panel>
       <Sheet open={open} onClose={() => setOpen(false)} title="Add employee">
         <form onSubmit={add}>
-          <Field label="Employee ID"><input className={inputCls} value={v.employee_id} onChange={(e) => setV({ ...v, employee_id: e.target.value })} required /></Field>
-          <Field label="Name"><input className={inputCls} value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} required /></Field>
-          <Field label="Password" hint="At least 6 characters. They can use it right away."><input className={inputCls} type="password" value={v.password} onChange={(e) => setV({ ...v, password: e.target.value })} required /></Field>
-          <div className="flex flex-col gap-2 mb-4">
+          <div className="grid grid-cols-2 gap-x-3">
+            <Field label="Employee ID"><input className={inputCls} value={v.employee_id} onChange={(e) => setV({ ...v, employee_id: e.target.value })} required /></Field>
+            <Field label="Name"><input className={inputCls} value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} required /></Field>
+          </div>
+          <Field label="Password" hint="At least 6 characters. Share it with them; they can log in right away.">
+            <input className={inputCls} type="password" value={v.password} onChange={(e) => setV({ ...v, password: e.target.value })} required />
+          </Field>
+          <span className="block text-[14px] font-medium text-ink-2 mb-2">Role</span>
+          <div className="flex flex-col gap-2 mb-5">
             {ROLES.map((r) => (
-              <label key={r.value} className={`flex items-start gap-3 p-3 rounded-xl border ${v.role === r.value ? "border-ink" : "border-line"}`}>
-                <input type="radio" name="role" checked={v.role === r.value} onChange={() => setV({ ...v, role: r.value })} className="mt-1 accent-zinc-900" />
-                <span><span className="block text-[15px] font-medium">{r.label}</span><span className="block text-[13px] text-mute">{r.text}</span></span>
+              <label key={r.value} className={`flex items-start gap-3 p-3 rounded-[10px] border cursor-pointer ${v.role === r.value ? "border-ink" : "border-line-2"}`}>
+                <input type="radio" name="role" checked={v.role === r.value} onChange={() => setV({ ...v, role: r.value })} className="mt-1 accent-[#1c1b19]" />
+                <span><span className="block text-[14px] font-medium">{ROLE_LABEL[r.value]}</span><span className="block text-[13px] text-mute">{r.text}</span></span>
               </label>
             ))}
           </div>
@@ -78,7 +79,7 @@ function Users() {
           <Button type="submit" className="w-full">Add employee</Button>
         </form>
       </Sheet>
-    </Card>
+    </Section>
   );
 }
 
@@ -86,18 +87,20 @@ export default function Settings() {
   const { user, logout } = useAuth();
   return (
     <>
-      <PageTitle title="Settings" />
-      <Card className="p-5 max-w-xl">
-        <div className="flex items-center justify-between gap-3">
+      <PageHeader title="Settings" />
+      <Section title="Your account">
+        <Panel className="px-5 py-4 flex items-center justify-between gap-4">
           <div>
-            <div className="text-[17px] font-semibold">{user!.name}</div>
-            <div className="text-[14px] text-mute">{user!.employee_id} · {ROLES.find((r) => r.value === user!.role)?.label}</div>
+            <div className="text-[15px] font-medium">{user!.name}</div>
+            <div className="text-[13px] text-mute">{user!.employee_id} · {ROLE_LABEL[user!.role]}</div>
           </div>
-          <Button variant="secondary" onClick={logout} className="px-4!"><LogOut size={18} /> Log out</Button>
-        </div>
-      </Card>
-      {user!.role === "admin" && <Users />}
-      <div className="mt-4"><ServerCard /></div>
+          <Button variant="secondary" onClick={logout}>Log out</Button>
+        </Panel>
+      </Section>
+      {user!.role === "admin" && <Employees />}
+      {(Capacitor.isNativePlatform() || needsServer()) && (
+        <Section title="Server"><Panel className="p-5 max-w-xl"><ServerCard /></Panel></Section>
+      )}
     </>
   );
 }

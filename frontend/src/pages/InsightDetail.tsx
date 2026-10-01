@@ -1,74 +1,72 @@
-import { ArrowLeft } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { ChartView } from "../components/Charts";
-import { TYPE_META } from "../components/InsightCard";
-import { Card, ErrorNote, Spinner } from "../components/ui";
+import { ErrorNote, PageHeader, Panel, Section, Spinner } from "../components/ui";
 import { fmtFull } from "../format";
+import { keyFigure, SECTIONS } from "../insightMeta";
 import { useData } from "../state";
 import { useInsights } from "../useInsights";
+import { PRIORITY } from "./Actions";
 
 export default function InsightDetail() {
   const { dsId, insightId } = useParams();
   const { datasets } = useData();
   const ds = datasets.find((d) => d.id === dsId);
   const { data, error } = useInsights(dsId, ds?.updated_at);
-  const nav = useNavigate();
   const insight = data?.insights.find((i) => i.id === decodeURIComponent(insightId ?? ""));
   const related = data?.actions.filter((a) => a.insight_id === insight?.id) ?? [];
+  const back = { to: "/insights", label: "Insights" };
 
+  if (error) return <><PageHeader title="Insight" back={back} /><ErrorNote message={error} /></>;
+  if (!data) return <Spinner />;
+  if (!insight) return <><PageHeader title="Insight" back={back} /><ErrorNote message="This insight is no longer there. The data may have been refreshed." /></>;
+
+  const k = keyFigure(insight);
+  const section = SECTIONS.find((s) => s.types.includes(insight.type));
   return (
     <>
-      <button type="button" onClick={() => nav(-1)} className="flex items-center gap-1.5 min-h-11 -ml-1 text-[16px] text-ink-2 mb-2">
-        <ArrowLeft size={20} /> Back
-      </button>
-      {error && <ErrorNote message={error} />}
-      {!data && !error && <Spinner />}
-      {data && !insight && <ErrorNote message="This insight no longer exists. The data may have been refreshed." />}
-      {insight && (
-        <>
-          <div className="text-[13px] text-mute font-medium uppercase tracking-wide">{TYPE_META[insight.type].label} · {data?.dataset.name}</div>
-          <h1 className="text-[26px] font-semibold tracking-tight leading-tight mt-1">{insight.title}</h1>
-          <p className="text-[17px] leading-relaxed text-ink-2 mt-3">{insight.narrative}</p>
+      <PageHeader back={back} title={insight.title} description={`${section?.title ?? ""} · ${data.dataset.name}`} />
+      <div className="grid grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)] gap-8 mb-10">
+        <div>
+          <div className={`text-[44px] leading-none font-semibold tracking-tight num ${k.tone === "good" ? "text-good" : k.tone === "bad" ? "text-bad" : "text-ink"}`}>{k.value}</div>
+          <div className="text-[14px] text-mute mt-2">{k.caption}</div>
+        </div>
+        <p className="text-[17px] leading-relaxed text-ink-2 max-w-2xl">{insight.narrative}</p>
+      </div>
 
-          {insight.chart && (
-            <Card className="p-4 mt-5">
-              <ChartView chart={insight.chart} />
-            </Card>
-          )}
-
-          {related.length > 0 && (
-            <Card className="p-4 mt-4">
-              <div className="text-[13px] text-mute font-medium uppercase tracking-wide mb-2">What to do</div>
-              {related.map((a) => (
-                <div key={a.id} className="py-1.5">
-                  <div className="text-[16px] font-semibold">{a.title}</div>
-                  <div className="text-[15px] text-ink-2 mt-0.5">{a.detail}</div>
+      {related.length > 0 && (
+        <Section title="What to do">
+          <Panel className="divide-y divide-line">
+            {related.map((a) => (
+              <div key={a.id} className="p-5 flex gap-3">
+                <span className={`mt-[7px] w-2 h-2 rounded-full shrink-0 ${PRIORITY[a.priority].dot}`} />
+                <div>
+                  <div className="text-[15px] font-semibold">{a.title}</div>
+                  <div className="text-[14px] text-ink-2 mt-0.5">{a.detail}</div>
                 </div>
-              ))}
-            </Card>
-          )}
+              </div>
+            ))}
+          </Panel>
+        </Section>
+      )}
 
-          {insight.chart && insight.chart.kind !== "scatter" && (
-            <Card className="mt-4 overflow-hidden">
-              <table className="w-full text-[15px]">
-                <thead>
-                  <tr className="bg-canvas text-left text-mute text-[13px]">
-                    <th className="font-medium px-4 py-2.5">{insight.chart.x}</th>
-                    <th className="font-medium px-4 py-2.5 text-right">{insight.chart.y}</th>
-                  </tr>
-                </thead>
+      {insight.chart && (
+        <Section title="The numbers">
+          <Panel className="p-5">
+            <ChartView chart={insight.chart} />
+          </Panel>
+          {insight.chart.kind === "line" && (
+            <Panel className="mt-3 overflow-x-auto">
+              <table className="w-full text-[14px]">
+                <thead><tr className="text-left text-mute text-[12px]"><th className="font-medium px-5 py-2.5">{insight.chart.x}</th><th className="font-medium px-5 py-2.5 text-right">{insight.chart.y}</th></tr></thead>
                 <tbody>
-                  {insight.chart.data.map((p, i) => (
-                    <tr key={i} className="border-t border-line">
-                      <td className="px-4 py-2.5">{p.label}</td>
-                      <td className={`px-4 py-2.5 text-right tabular ${(p.value ?? 0) < 0 ? "text-bad" : ""}`}>{fmtFull(p.value)}</td>
-                    </tr>
+                  {[...insight.chart.data].reverse().map((p, i) => (
+                    <tr key={i} className="border-t border-line"><td className="px-5 py-2.5">{p.label}</td><td className="px-5 py-2.5 text-right num">{fmtFull(p.value)}</td></tr>
                   ))}
                 </tbody>
               </table>
-            </Card>
+            </Panel>
           )}
-        </>
+        </Section>
       )}
     </>
   );

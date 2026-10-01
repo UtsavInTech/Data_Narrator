@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { needsServer } from "../api";
 import { useAuth } from "../auth";
 import { ServerCard } from "../components/ServerCard";
-import { Button, Card, ErrorNote, Field, inputCls } from "../components/ui";
+import { Button, ErrorNote, Field, inputCls } from "../components/ui";
 
 export default function Login() {
   const { setupNeeded, login, setup, error: authError, recheck } = useAuth();
@@ -25,42 +25,33 @@ export default function Login() {
     }
   };
 
+  const server = needsServer();
   return (
-    <div className="min-h-full flex items-center justify-center px-4 py-10 pt-safe">
-      <div className="w-full max-w-sm">
-        <img src="/icon.svg" alt="" className="w-14 h-14 mb-5" />
-        <h1 className="text-[26px] font-semibold tracking-tight leading-tight">
-          {needsServer() ? "Connect to your server" : setupNeeded ? "Set up Data Narrator" : "Log in"}
-        </h1>
-        <p className="text-[15px] text-mute mt-1 mb-6">
-          {needsServer()
-            ? "Enter the address your admin gave you."
-            : setupNeeded
-              ? "Create the first admin account. You can add employees after this."
-              : "Use your Employee ID and password."}
-        </p>
-        {needsServer() ? (
-          <ServerCard onConnected={recheck} />
-        ) : (
-          <Card className="p-5">
+    <div className="min-h-full flex flex-col pt-safe">
+      <div className="flex-1 flex items-center justify-center px-5 py-12">
+        <div className="w-full max-w-[22rem]">
+          <div className="flex items-center gap-2.5 mb-10">
+            <img src="/icon.svg" alt="" className="w-8 h-8" />
+            <span className="text-[17px] font-semibold tracking-tight">Data Narrator</span>
+          </div>
+          <h1 className="text-[24px] font-semibold tracking-[-0.015em]">{server ? "Connect to your server" : setupNeeded ? "Set up your workspace" : "Log in"}</h1>
+          <p className="text-[15px] text-mute mt-1.5 mb-8">
+            {server ? "Enter the address your admin gave you." : setupNeeded ? "Create the admin account. You'll add employees next." : "Use your Employee ID and password."}
+          </p>
+          {server ? <ServerCard onConnected={recheck} /> : (
             <form onSubmit={submit}>
-              {(error || authError) && <div className="mb-4"><ErrorNote message={error ?? authError ?? ""} /></div>}
-              <Field label="Employee ID">
-                <input className={inputCls} value={v.employee_id} onChange={set("employee_id")} autoCapitalize="characters" autoCorrect="off" autoComplete="username" required />
-              </Field>
-              {setupNeeded && (
-                <Field label="Your name">
-                  <input className={inputCls} value={v.name} onChange={set("name")} autoComplete="name" />
-                </Field>
-              )}
+              {(error || authError) && <div className="mb-5"><ErrorNote message={error ?? authError ?? ""} /></div>}
+              <Field label="Employee ID"><input className={inputCls} value={v.employee_id} onChange={set("employee_id")} autoCapitalize="characters" autoCorrect="off" autoComplete="username" required autoFocus /></Field>
+              {setupNeeded && <Field label="Your name"><input className={inputCls} value={v.name} onChange={set("name")} autoComplete="name" /></Field>}
               <Field label="Password" hint={setupNeeded ? "At least 6 characters" : undefined}>
                 <input className={inputCls} type="password" value={v.password} onChange={set("password")} autoComplete={setupNeeded ? "new-password" : "current-password"} required />
               </Field>
-              <Button className="w-full mt-1" busy={busy} type="submit">{setupNeeded ? "Create admin & continue" : "Log in"}</Button>
+              <Button className="w-full mt-2" busy={busy} type="submit">{setupNeeded ? "Create account" : "Log in"}</Button>
             </form>
-          </Card>
-        )}
+          )}
+        </div>
       </div>
+      <p className="text-center text-[12px] text-faint pb-6">Your data stays on your company's server.</p>
     </div>
   );
 }

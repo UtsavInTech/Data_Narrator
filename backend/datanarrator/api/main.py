@@ -44,7 +44,7 @@ app.add_middleware(CORSMiddleware, allow_origins=config.CORS_ORIGINS, allow_meth
 
 def _public(ds: dict) -> dict:
     out = {k: ds[k] for k in ("id", "name", "kind", "source_type", "source_label", "row_count",
-                              "column_count", "status", "error", "created_at", "updated_at")}
+                              "column_count", "status", "stage", "error", "created_at", "updated_at")}
     out["writeback"] = entries.writeback_enabled(ds["id"])
     return out
 

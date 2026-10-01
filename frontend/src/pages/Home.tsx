@@ -1,20 +1,15 @@
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Database, Plus } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import type { Insight } from "../api";
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { DatasetPicker } from "../components/DatasetPicker";
-import { InsightCard } from "../components/InsightCard";
-import { Button, Card, Empty, ErrorNote, SectionTitle, Spinner } from "../components/ui";
+import { ImportsInProgress } from "../components/Imports";
+import { InsightRow } from "../components/InsightRow";
+import { Button, Empty, ErrorNote, PageHeader, Panel, Row, Section, SeeAll, Spinner } from "../components/ui";
+import { useAuth } from "../auth";
 import { pct } from "../format";
+import { highlights } from "../insightMeta";
 import { useData } from "../state";
 import { useInsights } from "../useInsights";
 import { PRIORITY } from "./Actions";
-
-/** Top insights, but at most one of each kind first, so Home isn't four trend lines. */
-function varied(list: Insight[], n: number) {
-  const seen = new Set<string>();
-  const first = list.filter((i) => i.type !== "quality" && !seen.has(i.type) && seen.add(i.type));
-  return [...first, ...list.filter((i) => !first.includes(i))].slice(0, n);
-}
 
 function greeting() {
   const h = new Date().getHours();
@@ -22,90 +17,82 @@ function greeting() {
 }
 
 export default function Home() {
+  const { user } = useAuth();
   const { current, datasets, loading, error } = useData();
   const { data, error: insErr } = useInsights(current?.id, current?.updated_at);
   const nav = useNavigate();
   const busy = datasets.filter((d) => d.status === "importing" || d.status === "processing");
+  const first = user!.name.split(" ")[0];
 
   if (loading) return <Spinner />;
-  if (error) return <div className="pt-6"><ErrorNote message={error} /></div>;
+  if (error) return <ErrorNote message={error} />;
+
   if (!current) {
-    return busy.length ? (
-      <Spinner label={`Reading ${busy[0].name}…`} />
-    ) : (
-      <Empty
-        icon={<Database size={28} />}
-        title="Welcome to Data Narrator"
-        text="Add an Excel file, a cloud link or a database. We'll work out what's in it and explain it in plain words."
-        action={<Button onClick={() => nav("/data/add")}><Plus size={20} /> Add your data</Button>}
-      />
+    return (
+      <>
+        <PageHeader title={`${greeting()}, ${first}`} description="Let's get your first data in." />
+        <ImportsInProgress items={busy} />
+        {!busy.length && (
+          <Empty
+            title="No data yet"
+            text={<>Add an Excel file or connect your company database. Data Narrator reads it, works out what each column means, and shows what matters, in plain words.</>}
+            action={user!.role === "admin" ? <Button onClick={() => nav("/data/add")}>Add data</Button> : undefined}
+          />
+        )}
+      </>
     );
   }
 
   return (
     <>
-      <p className="text-[15px] text-mute">{greeting()}</p>
-      <h1 className="text-[26px] font-semibold tracking-tight leading-tight mb-3">Here's what your data says</h1>
-      <DatasetPicker />
+      <PageHeader title={`${greeting()}, ${first}`} description="Here's what your data says." actions={<DatasetPicker />} />
+      <ImportsInProgress items={busy} />
 
-      {busy.length > 0 && (
-        <Link to="/data" className="mt-4 flex items-center gap-3 rounded-xl bg-surface border border-line px-4 min-h-12 text-[15px]">
-          <span className="w-2 h-2 rounded-full bg-ink animate-pulse" />
-          <span className="flex-1">Working on {busy.length} source{busy.length > 1 ? "s" : ""}…</span>
-          <ChevronRight size={18} className="text-mute" />
-        </Link>
-      )}
-
-      {insErr && <div className="mt-5"><ErrorNote message={insErr} /></div>}
+      {insErr && <ErrorNote message={insErr} />}
       {!data && !insErr && <Spinner label="Reading insights" />}
       {data && (
         <>
-          {data.headline && (
-            <Card className="p-5 mt-5 bg-ink! border-ink! text-white">
-              <div className="text-[13px] uppercase tracking-wide opacity-60 font-medium">The story so far</div>
-              <p className="text-[17px] leading-relaxed mt-2">{data.headline}</p>
-            </Card>
-          )}
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-            {data.kpis.map((k) => (
-              <Card key={k.label} className="p-4">
-                <div className="text-[14px] text-mute truncate">{k.agg === "Count" ? "Rows" : `${k.agg} ${k.label.toLowerCase()}`}</div>
-                <div className="text-[28px] font-semibold tracking-tight tabular mt-1 truncate" title={String(k.value)}>{k.display}</div>
-                {k.delta != null && (
-                  <div className={`text-[13px] font-medium mt-1 flex items-center gap-0.5 ${k.delta >= 0 ? "text-good" : "text-bad"}`}>
-                    {k.delta >= 0 ? <ArrowUpRight size={15} /> : <ArrowDownRight size={15} />}
-                    {pct(k.delta)} <span className="text-mute font-normal ml-1 truncate">{k.period}</span>
+          <Panel className="grid grid-cols-2 lg:grid-cols-4 mb-10 overflow-hidden">
+            {data.kpis.map((k, i) => (
+              <div key={k.label} className={`p-5 ${i % 2 ? "border-l border-line" : ""} ${i >= 2 ? "border-t lg:border-t-0 border-line" : ""} ${i === 2 ? "lg:border-l" : ""}`}>
+                <div className="text-[13px] text-mute truncate">{k.agg === "Count" ? "Records" : k.label}{k.agg === "Average" ? " (avg)" : ""}</div>
+                <div className="text-[26px] sm:text-[30px] leading-tight font-semibold tracking-tight num mt-1 truncate" title={String(k.value)}>{k.display}</div>
+                {k.delta != null ? (
+                  <div className={`text-[13px] mt-1 flex items-center gap-1 ${k.delta >= 0 ? "text-good" : "text-bad"}`}>
+                    {k.delta >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                    <span className="num">{pct(k.delta)}</span>
+                    <span className="text-mute truncate">in {k.period}</span>
                   </div>
-                )}
-              </Card>
+                ) : <div className="text-[13px] mt-1 text-faint">All time</div>}
+              </div>
             ))}
-          </div>
+          </Panel>
 
-          <SectionTitle to="/insights">Top insights</SectionTitle>
-          <div className="grid lg:grid-cols-2 gap-3">
-            {varied(data.insights, 4).map((i) => (
-              <InsightCard key={i.id} insight={i} datasetId={current.id} compact />
-            ))}
-          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] gap-x-8">
+            <Section title="Key findings" action={<SeeAll to="/insights">All insights</SeeAll>}>
+              <Panel className="divide-y divide-line overflow-hidden">
+                {highlights(data.insights, 4).map((i) => <InsightRow key={i.id} insight={i} datasetId={current.id} />)}
+              </Panel>
+            </Section>
 
-          {data.actions.length > 0 && (
-            <>
-              <SectionTitle to="/actions">What to do next</SectionTitle>
-              <Card className="divide-y divide-line">
-                {data.actions.slice(0, 3).map((a) => (
-                  <Link key={a.id} to="/actions" className="flex items-start gap-3 p-4 min-h-16">
-                    <span className={`mt-1.5 w-2.5 h-2.5 rounded-full shrink-0 ${PRIORITY[a.priority].dot}`} />
-                    <span className="flex-1">
-                      <span className="block text-[16px] font-medium leading-snug">{a.title}</span>
-                      <span className="block text-[14px] text-mute mt-0.5">{PRIORITY[a.priority].label} priority</span>
-                    </span>
-                    <ChevronRight size={18} className="text-mute mt-1" />
-                  </Link>
-                ))}
-              </Card>
-            </>
-          )}
+            <Section title="Needs attention" action={data.actions.length > 3 ? <SeeAll to="/actions" /> : undefined}>
+              {data.actions.length === 0 ? (
+                <Panel className="p-5 text-[14px] text-mute">Nothing urgent in this data.</Panel>
+              ) : (
+                <Panel className="divide-y divide-line overflow-hidden">
+                  {data.actions.slice(0, 3).map((a) => (
+                    <Row key={a.id} to={`/insights/${current.id}/${encodeURIComponent(a.insight_id)}`} className="items-start">
+                      <span className={`mt-[7px] w-2 h-2 rounded-full shrink-0 ${PRIORITY[a.priority].dot}`} />
+                      <span className="min-w-0">
+                        <span className="block text-[14px] font-medium leading-snug">{a.title}</span>
+                        <span className="block text-[13px] text-mute mt-0.5">{PRIORITY[a.priority].label}</span>
+                      </span>
+                    </Row>
+                  ))}
+                </Panel>
+              )}
+            </Section>
+          </div>
         </>
       )}
     </>
