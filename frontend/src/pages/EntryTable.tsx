@@ -207,7 +207,7 @@ export default function EntryTable() {
               ))}
             </div>
             {error && <div className="mb-4"><ErrorNote message={error} /></div>}
-            <div className="flex items-center gap-3 pt-2 border-t border-line mt-1 pt-5">
+            <div className="flex items-center gap-3 border-t border-line mt-1 pt-5">
               {editing && <Button type="button" variant="secondary" onClick={() => { setEditing(null); setLast(null); setValues(blank(fields)); setTyped(new Set()); }}>Cancel</Button>}
               <Button type="submit" busy={busy} className="min-w-44">{editing ? "Save changes" : "Add to drafts"}</Button>
               <span className="text-[13px] text-mute">* required · Enter moves to the next box · Ctrl+Enter adds the row</span>
@@ -247,7 +247,7 @@ export default function EntryTable() {
                         {cols.map((f) => <td key={f.name} className="px-3 py-2.5 whitespace-nowrap num">{String(d.data[f.name] ?? "–")}</td>)}
                         <td className="pr-2 py-1.5 whitespace-nowrap text-right">
                           <button type="button" onClick={() => edit(d)} className="w-8 h-8 inline-flex items-center justify-center text-mute hover:text-ink rounded-[8px]" aria-label="Edit"><Pencil size={15} /></button>
-                          <button type="button" onClick={() => api.deleteEntry(id, d.id).then(loadDrafts)} className="w-8 h-8 inline-flex items-center justify-center text-mute hover:text-bad rounded-[8px]" aria-label="Delete"><Trash2 size={15} /></button>
+                          <button type="button" onClick={() => api.deleteEntry(id, d.id).then(loadDrafts).catch((e: Error) => setError(e.message))} className="w-8 h-8 inline-flex items-center justify-center text-mute hover:text-bad rounded-[8px]" aria-label="Delete"><Trash2 size={15} /></button>
                         </td>
                       </tr>
                     );
@@ -257,8 +257,8 @@ export default function EntryTable() {
               {drafts.some((d) => Object.keys(d.errors).length || Object.keys(d.warnings).length) && (
                 <div className="border-t border-line px-4 py-3 space-y-1 text-[13px]">
                   {drafts.flatMap((d) => [
-                    ...Object.entries(d.errors).map(([k, m]) => <div key={d.id + k} className="text-bad">{String(d.data[cols[0].name] ?? "")}: {k} {m}</div>),
-                    ...Object.entries(d.warnings).map(([k, m]) => <div key={d.id + k + "w"} className="text-warn">{String(d.data[cols[0].name] ?? "")}: {k} {m}</div>),
+                    ...Object.entries(d.errors).map(([k, m]) => <div key={d.id + k} className="text-bad">{String(d.data[cols[0]?.name ?? "Row"] ?? "")}: {k} {m}</div>),
+                    ...Object.entries(d.warnings).map(([k, m]) => <div key={d.id + k + "w"} className="text-warn">{String(d.data[cols[0]?.name ?? "Row"] ?? "")}: {k} {m}</div>),
                   ])}
                 </div>
               )}

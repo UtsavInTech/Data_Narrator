@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { needsServer } from "../api";
 import { useAuth } from "../auth";
+import { DemoCompanies } from "../components/DemoCompanies";
 import { ServerCard } from "../components/ServerCard";
 import { Button, ErrorNote, Field, inputCls } from "../components/ui";
 
@@ -40,15 +41,24 @@ export default function Login() {
             {server ? "Enter the address your admin gave you." : setupNeeded ? "Create the admin account. You'll add employees next." : "Use your Employee ID and password."}
           </p>
           {server ? <ServerCard onConnected={recheck} /> : (
-            <form onSubmit={submit}>
-              {(error || authError) && <div className="mb-5"><ErrorNote message={error ?? authError ?? ""} /></div>}
-              <Field label="Employee ID"><input className={inputCls} value={v.employee_id} onChange={set("employee_id")} autoCapitalize="characters" autoCorrect="off" autoComplete="username" required autoFocus /></Field>
-              {setupNeeded && <Field label="Your name"><input className={inputCls} value={v.name} onChange={set("name")} autoComplete="name" /></Field>}
-              <Field label="Password" hint={setupNeeded ? "At least 6 characters" : undefined}>
-                <input className={inputCls} type="password" value={v.password} onChange={set("password")} autoComplete={setupNeeded ? "new-password" : "current-password"} required />
-              </Field>
-              <Button className="w-full mt-2" busy={busy} type="submit">{setupNeeded ? "Create account" : "Log in"}</Button>
-            </form>
+            <>
+              <form onSubmit={submit}>
+                {(error || authError) && <div className="mb-5"><ErrorNote message={error ?? authError ?? ""} /></div>}
+                <Field label="Employee ID"><input className={inputCls} value={v.employee_id} onChange={set("employee_id")} autoCapitalize="characters" autoCorrect="off" autoComplete="username" required autoFocus /></Field>
+                {setupNeeded && <Field label="Your name"><input className={inputCls} value={v.name} onChange={set("name")} autoComplete="name" required /></Field>}
+                <Field label="Password" hint={setupNeeded ? "At least 6 characters" : undefined}>
+                  <input className={inputCls} type="password" value={v.password} onChange={set("password")} autoComplete={setupNeeded ? "new-password" : "current-password"} required />
+                </Field>
+                <Button className="w-full mt-2" busy={busy} type="submit">{setupNeeded ? "Create account" : "Log in"}</Button>
+              </form>
+              {!setupNeeded && (
+                <div className="mt-8 pt-6 border-t border-line">
+                  <p className="text-[14px] font-medium mb-1">Just looking?</p>
+                  <p className="text-[13px] text-mute mb-4">Open a sample company in one click, or type one of these logins above.</p>
+                  <DemoCompanies compact />
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

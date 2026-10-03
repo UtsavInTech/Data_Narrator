@@ -16,7 +16,7 @@ export function PageHeader({ title, description, actions, back }: {
       )}
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
-          <h1 className="text-[26px] leading-[1.15] font-semibold tracking-[-0.015em] text-ink">{title}</h1>
+          <h1 className="serif text-[32px] leading-[1.1] font-medium text-ink">{title}</h1>
           {description && <p className="text-[15px] text-mute mt-1.5 max-w-2xl">{description}</p>}
         </div>
         {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
@@ -32,7 +32,7 @@ export function Section({ title, action, children, className = "" }: {
     <section className={`mb-10 min-w-0 ${className}`}>
       {(title || action) && (
         <div className="flex items-baseline justify-between gap-4 mb-3">
-          {title && <h2 className="text-[16px] font-semibold text-ink">{title}</h2>}
+          {title && <h2 className="serif text-[20px] font-medium text-ink">{title}</h2>}
           {action}
         </div>
       )}
@@ -42,7 +42,7 @@ export function Section({ title, action, children, className = "" }: {
 }
 
 export function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <div className={`bg-surface border border-line rounded-[12px] ${className}`}>{children}</div>;
+  return <div className={`bg-surface border border-line rounded-[12px] shadow-[0_1px_0_rgba(28,27,25,0.03),0_10px_28px_-24px_rgba(19,32,27,0.3)] ${className}`}>{children}</div>;
 }
 
 /** A row inside a list panel. Becomes a link when `to` is given. */

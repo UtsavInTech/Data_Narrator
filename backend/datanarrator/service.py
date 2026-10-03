@@ -156,7 +156,17 @@ def analyze(ds_id: str):
             table_name = ds["meta"].get("fact_name", table_name)
         catalog.update(ds_id, stage="insights")
         result = insights.generate(con, rel, prof, table_name)
-        result["actions"] = actions.recommend(result["insights"], result["story"]["facts"].get("main_measure"))
+        if ds["kind"] == "model":
+            # A gap in a joined table's column means "no matching row yet" (a trip not billed), not missing data.
+            dim_cols = set(ds["meta"].get("dim_columns", []))
+            gap = lambda i: i["type"] == "quality" and i["facts"].get("column") in dim_cols and not i["facts"].get("examples")  # noqa: E731
+            dropped = {i["summary"] for i in result["insights"] if gap(i)}
+            result["insights"] = [i for i in result["insights"] if not gap(i)]
+            for sec in result["story"]["sections"]:
+                if sec["key"] == "check":
+                    sec["paragraphs"] = [t for t in sec["paragraphs"] if t not in dropped]
+            result["story"]["sections"] = [sec for sec in result["story"]["sections"] if sec["paragraphs"]]
+        result["actions"] = actions.recommend(result["insights"], result["story"]["facts"].get("main_measure"), table_name)
         catalog.save_json(ds_id, "profile", prof)
         catalog.save_json(ds_id, "insights", result)
         # How complete a business picture this table gives; the app opens the best one first.
@@ -166,6 +176,8 @@ def analyze(ds_id: str):
         catalog.update(ds_id, meta={**ds["meta"], "importance": round(importance, 2)})
         catalog.update(ds_id, status="ready", stage=None, row_count=rows, column_count=len(prof["columns"]))
     except Exception as e:
+        if not catalog.get(ds_id):
+            return  # replaced while we worked (a joined view rebuilt as more tables arrived): nothing to report
         log.error("analysis failed for %s: %s", ds_id, traceback.format_exc())
         catalog.update(ds_id, status="error", error=_friendly(e))
     finally:

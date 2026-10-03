@@ -57,7 +57,7 @@ def pick_dims(prof) -> list[dict]:
 
 
 def pick_time(prof) -> dict | None:
-    ts = by_role(prof, "time")
+    ts = [c for c in by_role(prof, "time") if c["subtype"] != "since"]
     ts.sort(key=lambda c: (c["subtype"] == "year", "date" not in c["name"].lower(), c["null_pct"]))
     return ts[0] if ts else None
 
@@ -178,6 +178,11 @@ def breakdowns(con, rel, measures, dims) -> list[dict]:
     return out
 
 
+def _as_datetime(v):
+    """DuckDB gives dates or timestamps depending on the column; compare them as timestamps."""
+    return v if isinstance(v, dt.datetime) else dt.datetime.combine(v, dt.time())
+
+
 def trends(con, rel, measures, tcol) -> tuple[list[dict], dict, str | None]:
     texpr = time_expr(tcol)
     grain = _grain(con, rel, texpr)
@@ -195,7 +200,7 @@ def trends(con, rel, measures, tcol) -> tuple[list[dict], dict, str | None]:
     # 27 Sep for a monthly view) or it has far fewer rows than usual.
     last_t = con.execute(f"SELECT max({texpr}) FROM {rel}").fetchone()[0]
     period_days = {"day": 1, "week": 7, "month": 30.44, "quarter": 91.3, "year": 365.25}[grain]
-    covered = ((last_t - rows[-1][0]).total_seconds() / 86400 + 1) / period_days
+    covered = ((_as_datetime(last_t) - _as_datetime(rows[-1][0])).total_seconds() / 86400 + 1) / period_days
     partial = covered < 0.95 or rows[-1][1] < 0.5 * median_n
     full = rows[:-1] if partial else rows
 
@@ -487,4 +492,16 @@ def _story_insights(f: dict) -> list[dict]:
                             {"kind": "bar", "x": mv["dimension"], "y": "% vs usual", "data": [
                                 {"label": g, "value": round(ch * 100, 1)}, {"label": gu, "value": round(chu * 100, 1)}]},
                             measure=mv["measure"], dimension=mv["dimension"], group=name, change=change, month=mv["month"]))
+    for x in f.get("drifts") or []:
+        word = "fell" if x["current"] < x["usual"] else "rose"
+        summary = (f"{x['measure']} at {x['group']} {word} to {num(x['current'])} in {x['month']},"
+                   f" from its usual {num(x['usual'])}.")
+        details = [f"Other {plural(x['dimension']).lower()} held steady over the same months ({x['base']})."]
+        out.append(_insight("drift", f"{x['dimension']}|{x['measure']}|{x['group']}", f"{x['measure']} at {x['group']}",
+                            summary, details, 0.75 + min(0.2, abs(x["change"] or 0)),
+                            {"kind": "bar", "x": x["dimension"], "y": x["measure"], "data": [
+                                {"label": f"{x['group']} ({x['base']})", "value": round(x["usual"], 2)},
+                                {"label": f"{x['group']} ({x['month']})", "value": round(x["current"], 2)}]},
+                            measure=x["measure"], dimension=x["dimension"], group=x["group"], change=x["change"],
+                            current=x["current"], usual=x["usual"], month=x["month"]))
     return out

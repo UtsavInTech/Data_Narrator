@@ -1,8 +1,9 @@
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Scatter, ScatterChart, Tooltip, XAxis, YAxis } from "recharts";
 import type { Chart } from "../api";
 import { fmt, fmtFull } from "../format";
 
 const INK = "#1c1b19";
+const ACCENT = "#e0a21b";
 const GRID = "#e6e3dc";
 const tick = { fill: "#7a776f", fontSize: 12 };
 
@@ -18,7 +19,7 @@ export function Spark({ values, width = 120, height = 36 }: { values: number[]; 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" className="block">
       <path d={d} fill="none" stroke={INK} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={lx} cy={ly} r={2.75} fill={INK} />
+      <circle cx={lx} cy={ly} r={3.25} fill={ACCENT} stroke="#fff" strokeWidth={1.25} />
     </svg>
   );
 }
@@ -60,7 +61,7 @@ function Tip({ active, payload, label, column }: { active?: boolean; payload?: {
 
 /** Full-size chart for an insight's own page. */
 export function ChartView({ chart, height = 300, max = 15 }: { chart: Chart; height?: number; max?: number }) {
-  if (chart.kind === "bar") return <Bars data={chart.data} max={max} column={chart.y} suffix={chart.y.startsWith("%") ? "%" : ""} />;
+  if (chart.kind === "bar") return <Bars data={chart.data} max={max} column={chart.y} suffix={chart.y?.startsWith("%") ? "%" : ""} />;
   if (chart.kind === "scatter") {
     return (
       <ResponsiveContainer width="100%" height={height}>
@@ -75,13 +76,23 @@ export function ChartView({ chart, height = 300, max = 15 }: { chart: Chart; hei
   }
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <LineChart data={chart.data} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+      <AreaChart data={chart.data} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="dn-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={INK} stopOpacity={0.12} />
+            <stop offset="100%" stopColor={INK} stopOpacity={0} />
+          </linearGradient>
+        </defs>
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey="label" tick={tick} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={28} />
         <YAxis tick={tick} tickLine={false} axisLine={false} tickFormatter={(v: number) => fmt(v, chart.y)} width={64} />
         <Tooltip content={<Tip column={chart.y} />} cursor={{ stroke: "#d6d2c8" }} />
-        <Line type="monotone" dataKey="value" stroke={INK} strokeWidth={2} dot={false} activeDot={{ r: 4 }} isAnimationActive={false} />
-      </LineChart>
+        <Area type="monotone" dataKey="value" stroke={INK} strokeWidth={2} fill="url(#dn-area)" isAnimationActive={false}
+          activeDot={{ r: 4, fill: ACCENT, stroke: "#fff" }}
+          dot={(p: { cx?: number; cy?: number; index?: number }) => p.index === chart.data.length - 1
+            ? <circle key="last" cx={p.cx} cy={p.cy} r={4} fill={ACCENT} stroke="#fff" strokeWidth={1.5} />
+            : <g key={p.index} />} />
+      </AreaChart>
     </ResponsiveContainer>
   );
 }

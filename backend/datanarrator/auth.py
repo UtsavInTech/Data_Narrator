@@ -1,5 +1,8 @@
 """Employees, roles and sessions. Login is Employee ID + password.
 
+Every user belongs to one workspace (a company). Real users live in "local"; the
+sample companies each have their own, so visitors never see real data.
+
 Roles (what the app shows is decided by these):
   admin     everything: data sources, users, schedules
   manager   insights and daily reports
@@ -15,6 +18,7 @@ from fastapi import Depends, Header, HTTPException, Query
 from . import catalog
 
 ROLES = ("admin", "manager", "operator")
+LOCAL = "local"
 SESSION_DAYS = 30
 _ITERATIONS = 200_000
 
@@ -38,6 +42,9 @@ CREATE TABLE IF NOT EXISTS sessions (
 def init():
     with catalog._lock, catalog._conn() as con:
         con.executescript(SCHEMA)
+        cols = {r[1] for r in con.execute("PRAGMA table_info(users)").fetchall()}
+        if "workspace" not in cols:
+            con.execute(f"ALTER TABLE users ADD COLUMN workspace TEXT NOT NULL DEFAULT '{LOCAL}'")
 
 
 def _hash(password: str, salt: str | None = None) -> str:
@@ -52,15 +59,17 @@ def _check(password: str, stored: str) -> bool:
 
 
 def _public(r) -> dict:
-    return {"employee_id": r["employee_id"], "name": r["name"], "role": r["role"], "active": bool(r["active"])}
+    return {"employee_id": r["employee_id"], "name": r["name"], "role": r["role"], "active": bool(r["active"]),
+            "workspace": r["workspace"]}
 
 
 def setup_needed() -> bool:
+    """True until the real company's first admin exists (sample-company accounts don't count)."""
     with catalog._conn() as con:
-        return con.execute("SELECT count(*) FROM users").fetchone()[0] == 0
+        return con.execute("SELECT count(*) FROM users WHERE workspace=?", (LOCAL,)).fetchone()[0] == 0
 
 
-def create_user(employee_id: str, name: str, password: str, role: str) -> dict:
+def create_user(employee_id: str, name: str, password: str, role: str, workspace: str = LOCAL) -> dict:
     employee_id = employee_id.strip()
     if role not in ROLES:
         raise HTTPException(400, f"Role must be one of {', '.join(ROLES)}")
@@ -69,17 +78,21 @@ def create_user(employee_id: str, name: str, password: str, role: str) -> dict:
     with catalog._lock, catalog._conn() as con:
         if con.execute("SELECT 1 FROM users WHERE lower(employee_id)=lower(?)", (employee_id,)).fetchone():
             raise HTTPException(409, f"Employee ID {employee_id} already exists")
-        con.execute("INSERT INTO users VALUES (?,?,?,?,1,?)",
-                    (employee_id, name.strip() or employee_id, role, _hash(password), time.time()))
-    return {"employee_id": employee_id, "name": name.strip() or employee_id, "role": role, "active": True}
+        con.execute("INSERT INTO users (employee_id, name, role, pw_hash, active, created_at, workspace)"
+                    " VALUES (?,?,?,?,1,?,?)",
+                    (employee_id, name.strip() or employee_id, role, _hash(password), time.time(), workspace))
+    return {"employee_id": employee_id, "name": name.strip() or employee_id, "role": role, "active": True,
+            "workspace": workspace}
 
 
-def list_users() -> list[dict]:
+def list_users(workspace: str = LOCAL) -> list[dict]:
     with catalog._conn() as con:
-        return [_public(r) for r in con.execute("SELECT * FROM users ORDER BY created_at").fetchall()]
+        return [_public(r) for r in con.execute("SELECT * FROM users WHERE workspace=? ORDER BY created_at",
+                                                (workspace,)).fetchall()]
 
 
-def update_user(employee_id: str, role: str | None = None, active: bool | None = None, password: str | None = None):
+def update_user(employee_id: str, role: str | None = None, active: bool | None = None, password: str | None = None,
+                workspace: str = LOCAL):
     sets, args = [], []
     if role is not None:
         if role not in ROLES:
@@ -94,7 +107,10 @@ def update_user(employee_id: str, role: str | None = None, active: bool | None =
     if not sets:
         return
     with catalog._lock, catalog._conn() as con:
-        con.execute(f"UPDATE users SET {', '.join(sets)} WHERE employee_id=?", (*args, employee_id))
+        found = con.execute(f"UPDATE users SET {', '.join(sets)} WHERE employee_id=? AND workspace=?",
+                            (*args, employee_id, workspace)).rowcount
+        if not found:
+            raise HTTPException(404, f"No employee {employee_id}")
         if active is False or password:
             con.execute("DELETE FROM sessions WHERE employee_id=?", (employee_id,))
 

@@ -76,7 +76,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const current = useMemo(() => {
-    const hit = datasets.find((d) => d.id === selected && d.status === "ready");
+    const hit = datasets.find((d) => d.id === selected && (d.status === "ready" || d.status === "processing"));
     return hit ?? pickDefault(datasets);
   }, [datasets, selected]);
 

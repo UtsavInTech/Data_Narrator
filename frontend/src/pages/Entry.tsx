@@ -5,6 +5,23 @@ import { api, fileUrl, type MisTable } from "../api";
 import { btnCls, Button, Empty, ErrorNote, Notice, PageHeader, Panel, Section, Spinner } from "../components/ui";
 import { ago, singular } from "../format";
 
+function TableRow({ t }: { t: MisTable }) {
+  return (
+    <div className="flex items-center gap-5 px-5 py-4">
+      <div className="flex-1 min-w-0">
+        <div className="text-[15px] font-semibold truncate">{t.name}</div>
+        <div className="text-[13px] text-mute num mt-0.5">
+          {t.row_count?.toLocaleString("en-IN")} saved{t.last_added ? ` · last added ${ago(t.last_added)}` : ""}
+          {t.drafts > 0 && <span className="text-warn"> · {t.drafts} draft{t.drafts > 1 ? "s" : ""} waiting</span>}
+        </div>
+      </div>
+      <Link to={`/entry/${t.id}`} className={`${btnCls(t.drafts ? "primary" : "secondary")} shrink-0`}>
+        <Plus size={16} /> {t.drafts ? "Continue" : `New ${singular(t.name).toLowerCase()}`}
+      </Link>
+    </div>
+  );
+}
+
 export default function Entry() {
   const [tables, setTables] = useState<MisTable[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,28 +57,26 @@ export default function Entry() {
 
       {tables && (
         <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_20rem] gap-x-12 gap-y-10">
-          <Section title="What do you want to record?">
+          <div className="min-w-0">
             {!tables.length ? (
-              <Empty title="No tables yet" text="An admin adds a table first, from an Excel file or a database. Its form then appears here." />
+              <Section title="What do you want to record?">
+                <Empty title="No tables yet" text="An admin adds a table first, from an Excel file or a database. Its form then appears here." />
+              </Section>
             ) : (
-              <Panel className="divide-y divide-line overflow-hidden">
-                {tables.map((t) => (
-                  <div key={t.id} className="flex items-center gap-5 px-5 py-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-semibold truncate">{t.name}</div>
-                      <div className="text-[13px] text-mute num mt-0.5">
-                        {t.row_count?.toLocaleString("en-IN")} saved{t.last_added ? ` · last added ${ago(t.last_added)}` : ""}
-                        {t.drafts > 0 && <span className="text-warn"> · {t.drafts} draft{t.drafts > 1 ? "s" : ""} waiting</span>}
-                      </div>
-                    </div>
-                    <Link to={`/entry/${t.id}`} className={`${btnCls(t.drafts ? "primary" : "secondary")} shrink-0`}>
-                      <Plus size={16} /> {t.drafts ? "Continue" : `New ${singular(t.name).toLowerCase()}`}
-                    </Link>
-                  </div>
+              <>
+                {[
+                  { title: "Every day", text: "Dated records such as invoices, collections and trips.", items: tables.filter((t) => t.daily) },
+                  { title: "Lists", text: "Customers, products and other lists you add to now and then.", items: tables.filter((t) => !t.daily) },
+                ].filter((g) => g.items.length).map((g) => (
+                  <Section key={g.title} title={g.title} action={<span className="text-[13px] text-mute">{g.text}</span>}>
+                    <Panel className="divide-y divide-line overflow-hidden">
+                      {g.items.map((t) => <TableRow key={t.id} t={t} />)}
+                    </Panel>
+                  </Section>
                 ))}
-              </Panel>
+              </>
             )}
-          </Section>
+          </div>
 
           <aside className="space-y-8">
             <div>

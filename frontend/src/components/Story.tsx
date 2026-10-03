@@ -4,6 +4,7 @@ import { ChartView } from "./Charts";
 
 /** The narration: a lead, then short sections, each with the picture that backs it. */
 export function Story({ data, datasetId }: { data: InsightsResponse; datasetId: string }) {
+  if (!data.story) return null;  // analysed by an older version; the server is re-reading it
   const byId = new Map(data.insights.map((i) => [i.id, i]));
   const chartFor = (key: string, insightId?: string) => {
     if (insightId && byId.get(insightId)?.chart) return byId.get(insightId)!;
@@ -17,7 +18,7 @@ export function Story({ data, datasetId }: { data: InsightsResponse; datasetId: 
   return (
     <article>
       <div className="label mb-3">The story so far{asOf ? ` · as of ${new Date(asOf).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : ""}</div>
-      <p className="text-[22px] lg:text-[24px] leading-[1.45] tracking-[-0.01em] text-ink max-w-3xl">{data.story.lead}</p>
+      <p className="serif text-[25px] lg:text-[28px] leading-[1.35] text-ink max-w-3xl">{data.story.lead}</p>
 
       <div className="mt-10 divide-y divide-line border-t border-line">
         {data.story.sections.map((s) => {
@@ -25,7 +26,7 @@ export function Story({ data, datasetId }: { data: InsightsResponse; datasetId: 
           return (
             <section key={s.key} className="py-8 grid xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] gap-x-10 gap-y-5">
               <div>
-                <h2 className="text-[17px] font-semibold mb-3">{s.heading}</h2>
+                <h3 className="serif text-[21px] font-medium mb-3">{s.heading}</h3>
                 <div className="space-y-3 text-[15.5px] leading-[1.65] text-ink-2 max-w-2xl">
                   {s.paragraphs.map((p, i) => <p key={i}>{p}</p>)}
                 </div>

@@ -5,6 +5,7 @@ import { NAV, Shell } from "./components/Shell";
 import { Spinner } from "./components/ui";
 import Actions from "./pages/Actions";
 import AddData from "./pages/AddData";
+import Brief from "./pages/Brief";
 import Data from "./pages/Data";
 import DatasetDetail from "./pages/DatasetDetail";
 import Entry from "./pages/Entry";
@@ -31,13 +32,14 @@ function Gate() {
     );
   }
   const r = user.role;
-  const home = NAV[r][0].to;
+  const home = NAV[r]?.[0]?.to ?? "/";
   const can = { insights: r !== "operator", entry: r !== "manager", reports: r !== "operator", data: r === "admin" };
   return (
-    <DataProvider>
+    <DataProvider key={user.employee_id}>
       <Shell>
         <Routes>
           <Route path="/" element={can.insights ? <Home /> : <Navigate to={home} replace />} />
+          {can.insights && <Route path="/brief" element={<Brief />} />}
           {can.insights && <Route path="/insights" element={<Insights />} />}
           {can.insights && <Route path="/insights/:dsId/:insightId" element={<InsightDetail />} />}
           {can.insights && <Route path="/actions" element={<Actions />} />}

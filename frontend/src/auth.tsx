@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, getToken, needsServer, setToken, type User } from "./api";
+import { api, getToken, needsServer, setToken, type Role, type User } from "./api";
 
 interface Auth {
   user: User | null;
@@ -8,6 +8,8 @@ interface Auth {
   error: string | null;
   login: (employeeId: string, password: string) => Promise<void>;
   setup: (b: { employee_id: string; name: string; password: string }) => Promise<void>;
+  /** Sign in to a sample company as one of its roles (front page, login page, or switching inside the app). */
+  enterDemo: (company: string, role: Role) => Promise<void>;
   logout: () => void;
   recheck: () => void;
 }
@@ -32,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let me: User | null = null;
       if (getToken() && !st.setup_needed) {
         // An old or expired session just means "log in again", not an error.
-        me = await api.me().then((r) => r.user).catch(() => { setToken(null); return null; });
+        me = await api.me().then((r) => r.user).catch(() => null);
       }
       setUser(me);
       setError(null);
@@ -64,13 +66,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(r.user);
   };
 
+  const enterDemo = async (company: string, role: Role) => {
+    if (getToken()) api.logout().catch(() => undefined);
+    const r = await api.tryDemo(company, role);
+    setToken(r.token);
+    setUser(r.user);
+  };
+
   const logout = () => {
     api.logout().catch(() => undefined);
     setToken(null);
     setUser(null);
   };
 
-  return <Ctx.Provider value={{ user, checking, setupNeeded, error, login, setup, logout, recheck }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, checking, setupNeeded, error, login, setup, enterDemo, logout, recheck }}>{children}</Ctx.Provider>;
 }
 
 export function useAuth() {

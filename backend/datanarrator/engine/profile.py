@@ -6,6 +6,7 @@ Each column gets a semantic role:
   time       dates/timestamps, or integer years
   entity     high-cardinality names (customers, products) - good for top-N
   id         keys and codes - used for joins, never charted
+  attribute  numbers that describe a thing rather than add up (credit limit, capacity, odometer)
   text       long free text
   empty / constant
 One SUMMARIZE pass over (a sample of) the data drives everything.
@@ -24,9 +25,15 @@ MEASURE_HINT = re.compile(
     r"amount|amt|sales|revenue|profit|loss|cost|price|qty|quantity|total|value|income|expense|salary|wage|"
     r"spend|budget|target|margin|discount|tax|fee|balance|units|volume|weight|score|duration|hours|"
     r"rate|age|marks|percent|pct|ratio|count|sum|gmv|mrp|turnover|premium|claim|stock|inventory|kwh|"
-    r"temperature|temp|height|length|distance|speed|days|visits|clicks|views|orders|rating|tenure|items|lines|pieces|pcs|bills", re.I)
+    r"temperature|temp|height|length|distance|speed|days|visits|clicks|views|orders|rating|tenure|items|lines|pieces|pcs|bills|%|"
+    r"litres|liters|kg|tonnes|output|used|wastage|rejected", re.I)
+# A property of the row's thing, not an amount: summing or trending it means nothing.
+ATTRIBUTE_NAME = re.compile(r"limit|capacity|odometer|meter reading|reading|reorder|shelf life|credit (days|period)|"
+                            r"^(lat|latitude|lon|lng|longitude)$|pin ?code|model year|year of (make|manufacture)", re.I)
+# Dates that say when a thing started (a customer since 2019), not when something happened.
+SINCE_NAME = re.compile(r"since|joined|joining|onboard|created|opened|established|birth|dob|registration", re.I)
 AVG_HINT = re.compile(
-    r"price|rate|pct|percent|%|ratio|score|age|temp|avg|average|mean|margin|rating|duration|lat|lon|"
+    r"price|mrp|rate|pct|percent|%|ratio|score|\bage\b|temp|avg|average|mean|margin|rating|duration|\blat|\blon|"
     r"tenure|marks|grade|speed|height|weight|bmi|probability|share", re.I)
 GEO_HINT = re.compile(r"country|state|city|region|zone|district|province|territory|location|branch|area|market", re.I)
 YEAR_NAME = re.compile(r"year|yr|fy", re.I)
@@ -90,13 +97,15 @@ def profile(con, rel: str, row_count: int) -> dict:
         elif uniq <= 1:
             col["role"] = "constant"
         elif fam == "time":
-            col["role"] = "time"
+            col["role"], col["subtype"] = "time", "since" if SINCE_NAME.search(name) else None
         elif fam == "bool":
             col["role"], col["subtype"] = "dimension", "flag"
         elif fam == "number":
             lo, hi = _num(s["min"]), _num(s["max"])
             is_int = typ.upper().startswith(INTEGER)
-            if YEAR_NAME.search(name) and is_int and lo and hi and 1900 <= lo and hi <= 2100:
+            if ATTRIBUTE_NAME.search(name):
+                col["role"] = "attribute"
+            elif YEAR_NAME.search(name) and is_int and lo and hi and 1900 <= lo and hi <= 2100:
                 col["role"], col["subtype"] = "time", "year"
             elif id_name and not measure_hint:
                 col["role"] = "id"

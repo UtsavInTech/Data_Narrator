@@ -3,7 +3,7 @@ import { api, needsServer, type Role, type User } from "../api";
 import { useAuth } from "../auth";
 import { ServerCard } from "../components/ServerCard";
 import { ROLE_LABEL } from "../components/Shell";
-import { Button, ErrorNote, Field, inputCls, PageHeader, Panel, Section, Sheet } from "../components/ui";
+import { Button, ErrorNote, Field, inputCls, Notice, PageHeader, Panel, Section, Sheet } from "../components/ui";
 import { Capacitor } from "@capacitor/core";
 
 const ROLES: { value: Role; text: string }[] = [
@@ -14,6 +14,7 @@ const ROLES: { value: Role; text: string }[] = [
 
 function Employees() {
   const { user: me } = useAuth();
+  const locked = !!me!.demo;  // sample companies: the logins are public, so nobody may change them
   const [users, setUsers] = useState<User[]>([]);
   const [open, setOpen] = useState(false);
   const [v, setV] = useState({ employee_id: "", name: "", password: "", role: "operator" as Role });
@@ -35,7 +36,8 @@ function Employees() {
   };
 
   return (
-    <Section title="Employees" action={<Button variant="secondary" className="min-h-9! text-[14px]!" onClick={() => setOpen(true)}>Add employee</Button>}>
+    <Section title="Employees" action={!locked && <Button variant="secondary" className="min-h-9! text-[14px]!" onClick={() => setOpen(true)}>Add employee</Button>}>
+      {locked && <div className="mb-3"><Notice>In a sample company the employees can't be changed. In your own workspace you add people here, give each a role, and disable them when they leave.</Notice></div>}
       {error && !open && <div className="mb-3"><ErrorNote message={error} /></div>}
       <Panel className="divide-y divide-line overflow-hidden">
         {users.map((u) => (
@@ -44,13 +46,13 @@ function Employees() {
               <span className={`block text-[14px] font-medium truncate ${u.active ? "" : "text-faint line-through"}`}>{u.name}</span>
               <span className="block text-[13px] text-mute">{u.employee_id}</span>
             </span>
-            <select className="min-h-9 px-2.5 rounded-[8px] border border-line-2 bg-surface text-[13px]" value={u.role} disabled={u.employee_id === me!.employee_id}
+            <select className="min-h-9 px-2.5 rounded-[8px] border border-line-2 bg-surface text-[13px]" value={u.role} disabled={locked || u.employee_id === me!.employee_id}
               onChange={(e) => api.editUser(u.employee_id, { role: e.target.value as Role }).then(load).catch((er: Error) => setError(er.message))}
               aria-label={`Role for ${u.name}`}>
               {ROLES.map((r) => <option key={r.value} value={r.value}>{ROLE_LABEL[r.value]}</option>)}
             </select>
-            {u.employee_id !== me!.employee_id && (
-              <button type="button" className="text-[13px] text-mute hover:text-ink min-h-9 px-2" onClick={() => api.editUser(u.employee_id, { active: !u.active }).then(load)}>
+            {!locked && u.employee_id !== me!.employee_id && (
+              <button type="button" className="text-[13px] text-mute hover:text-ink min-h-9 px-2" onClick={() => api.editUser(u.employee_id, { active: !u.active }).then(load).catch((e: Error) => setError(e.message))}>
                 {u.active ? "Disable" : "Enable"}
               </button>
             )}

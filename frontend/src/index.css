@@ -1,31 +1,43 @@
 @import "tailwindcss";
 
-/* Data Narrator: a calm, precise business tool. Warm paper neutrals, ink for
-   emphasis, colour only for meaning (up / down / needs attention). */
+/* Data Narrator: the owner's morning edition. Warm paper and ink for reading,
+   a deep green-black for the frame you navigate in, one marigold accent for
+   "you are here" and the brief, and colour otherwise only for meaning
+   (good / watch / act). The serif is for what was written for you: headlines
+   and the story. Everything you operate is in Plex Sans. */
 @theme {
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Newsreader Variable", "IBM Plex Sans", Georgia, serif;
 
-  --color-paper: #f7f6f3;     /* page */
+  --color-frame: #13201b;     /* sidebar, bars: the frame around the paper */
+  --color-frame-2: #1f2f28;   /* hover / active inside the frame */
+  --color-frame-ink: #eef2ee; /* text on the frame */
+  --color-frame-mute: #9aaba1;/* secondary text on the frame */
+  --color-accent: #e0a21b;    /* marigold: current place, the brief */
+  --color-accent-bg: #fbf2dc;
+
+  --color-paper: #f6f5f0;     /* page */
   --color-surface: #ffffff;   /* raised areas */
   --color-sunken: #f1f0ec;    /* wells, hover, inputs at rest */
   --color-ink: #1c1b19;       /* primary text, primary actions, key data */
   --color-ink-2: #44423e;     /* secondary text */
-  --color-mute: #7a776f;      /* labels, meta */
+  --color-mute: #6b685f;      /* labels, meta (WCAG AA against paper) */
   --color-faint: #a8a59c;     /* placeholders, axis */
   --color-line: #e6e3dc;      /* hairlines */
   --color-line-2: #d6d2c8;    /* stronger borders */
 
-  --color-good: #2f6f4e;
+  --color-good: #1f7a4d;
   --color-good-bg: #eaf3ed;
-  --color-bad: #b42318;
+  --color-bad: #c2412d;
   --color-bad-bg: #fbeceb;
-  --color-warn: #a15c07;
+  --color-warn: #a86a05;
   --color-warn-bg: #fdf3e2;
 
   --radius-ui: 10px;
 }
 
 html, body, #root { height: 100%; }
+html { scroll-behavior: smooth; }
 body {
   margin: 0;
   background: var(--color-paper);
@@ -45,6 +57,9 @@ button, a, [role="button"] { -webkit-user-select: none; user-select: none; touch
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
 .recharts-wrapper *:focus { outline: none; }
+
+/* Headlines and the written story */
+.serif { font-family: var(--font-serif); font-optical-sizing: auto; letter-spacing: -0.01em; }
 
 /* Eyebrow labels above sections and figures */
 .label { font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-mute); }

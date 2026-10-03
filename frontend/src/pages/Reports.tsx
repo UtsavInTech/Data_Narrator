@@ -2,14 +2,14 @@ import { Download } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api, fileUrl, type DailyReport, type ReportFile } from "../api";
 import { btnCls, Button, Empty, ErrorNote, Field, inputCls, PageHeader, Panel, Section, Sheet, Spinner } from "../components/ui";
-import { fmtFull, longDate } from "../format";
+import { fmtFull, longDate, lowerIsBetter } from "../format";
 import { useData } from "../state";
 
 const short = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "–");
 
-function Change({ v }: { v: number | null }) {
+function Change({ v, label }: { v: number | null; label: string }) {
   if (v == null) return <span className="text-faint">–</span>;
-  return <span className={v >= 0 ? "text-good" : "text-bad"}>{v >= 0 ? "+" : "−"}{Math.abs(v * 100).toFixed(Math.abs(v) < 0.1 ? 1 : 0)}%</span>;
+  return <span className={(v >= 0) !== lowerIsBetter(label) ? "text-good" : "text-bad"}>{v >= 0 ? "+" : "−"}{Math.abs(v * 100).toFixed(Math.abs(v) < 0.1 ? 1 : 0)}%</span>;
 }
 
 function ScheduleSheet({ open, onClose, tableId }: { open: boolean; onClose: () => void; tableId: string }) {
@@ -123,7 +123,7 @@ export default function Reports() {
                           <td className="px-5 py-3 font-medium whitespace-nowrap">{m.label}{m.kind === "avg" ? " (avg)" : ""}</td>
                           <td className="px-4 py-3 text-right num font-semibold">{fmtFull(m.today, m.label)}</td>
                           <td className="px-4 py-3 text-right num text-ink-2">{fmtFull(m.previous, m.label)}</td>
-                          <td className="px-4 py-3 text-right num"><Change v={m.change} /></td>
+                          <td className="px-4 py-3 text-right num"><Change v={m.change} label={m.label} /></td>
                           <td className="px-4 py-3 text-right num text-ink-2">{fmtFull(m.week_ago, m.label)}</td>
                           <td className="px-5 py-3 text-right num text-ink-2">{m.month_to_date == null ? "–" : fmtFull(m.month_to_date, m.label)}</td>
                         </tr>

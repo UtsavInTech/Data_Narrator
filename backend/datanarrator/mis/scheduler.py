@@ -69,6 +69,8 @@ def start():
         while True:
             try:
                 run_due()
+                from .. import brief  # here, not at the top: brief imports this package
+                brief.run_due()
             except Exception:
                 log.exception("scheduler tick failed")
             time.sleep(60)

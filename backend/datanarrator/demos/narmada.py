@@ -14,7 +14,6 @@ Lines and Payments. The data has the patterns a real business has:
 """
 import datetime as dt
 import random
-from pathlib import Path
 
 import pandas as pd
 
@@ -177,13 +176,3 @@ def generate(today: dt.date | None = None) -> dict[str, pd.DataFrame]:
     }
 
 
-def write(folder: Path, today: dt.date | None = None) -> list[Path]:
-    """Write the sample company as Excel workbooks, one per table."""
-    folder.mkdir(parents=True, exist_ok=True)
-    out = []
-    for name, frame in generate(today).items():
-        path = folder / f"{name}.xlsx"
-        with pd.ExcelWriter(path, engine="openpyxl") as xl:
-            frame.to_excel(xl, sheet_name=name[:31], index=False)
-        out.append(path)
-    return out

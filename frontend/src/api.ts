@@ -23,7 +23,30 @@ export interface Dataset {
 }
 
 export type Role = "admin" | "manager" | "operator";
-export interface User { employee_id: string; name: string; role: Role; active: boolean }
+export interface User {
+  employee_id: string; name: string; role: Role; active: boolean;
+  /** Company shown in the app; empty for an unnamed real workspace. */
+  company?: string;
+  /** Signed in to one of the sample companies (public logins, nothing real). */
+  demo?: boolean;
+  demo_slug?: string | null;
+}
+
+export interface DemoAccount { employee_id: string; name: string; role: Role; job: string }
+export interface DemoCompany { slug: string; name: string; industry: string; place: string; about: string; accounts: DemoAccount[] }
+
+export type AreaStatus = "act" | "watch" | "fine";
+export interface Area { id: string; name: string; lead: string; kpi: Kpi; urgent: number; importance: number; status: AreaStatus; spark: number[] }
+
+export interface BriefFigure { label: string; value: string; change: number | null; month: string | null }
+export interface Brief {
+  company: string; day: string; link: string; subject: string; text: string; html: string;
+  areas: { area: string; status: AreaStatus; quiet: boolean; figures: BriefFigure[]; records?: number }[];
+  actions: { title: string; detail: string; area: string; priority: string }[];
+  missing: string[];
+}
+export interface BriefSettings { at_time: string; emails: string; phones: string; enabled: boolean; last_run: string | null; channels: { email: boolean; whatsapp: boolean } }
+export interface Overview { areas: Area[]; actions: (Action & { dataset_id: string; dataset: string })[]; total_actions: number }
 
 export interface LookupOption { value: string; label: string; detail: Record<string, unknown> }
 export interface Formula { target: string; op: "add" | "mul" | "days"; args: string[]; k?: number }
@@ -46,7 +69,7 @@ export interface Field {
 
 export interface Entry { id: string; data: Record<string, unknown>; errors: Record<string, string>; warnings: Record<string, string>; created_by?: string }
 export interface Batch { id: string; kind: "import" | "entry"; rows: number; source: string; created_by: string | null; created_at: number }
-export interface MisTable extends Dataset { drafts: number; last_added: number | null }
+export interface MisTable extends Dataset { drafts: number; last_added: number | null; daily?: boolean }
 export interface ReportFile { ds_id: string; dataset: string; date: string; file: string; created_at: number }
 export interface ReportMetric { label: string; kind: string; today: number | null; previous: number | null; change: number | null; week_ago: number | null; month_to_date: number | null }
 export interface DailyReport {
@@ -94,7 +117,7 @@ export interface Chart { kind: "bar" | "line" | "scatter"; x: string; y: string;
 
 export interface Insight {
   id: string;
-  type: "breakdown" | "trend" | "top" | "correlation" | "outlier" | "quality" | "collect" | "mover";
+  type: "breakdown" | "trend" | "top" | "correlation" | "outlier" | "quality" | "collect" | "mover" | "drift";
   title: string;
   summary: string;
   narrative: string;
@@ -250,7 +273,14 @@ export const api = {
     call<{ rows: number; pushed: boolean; committed_by: User }>(`/api/mis/${id}/commit`, json(b)),
   reports: () => call<{ reports: ReportFile[] }>("/api/mis/reports"),
   dailyReport: (id: string, date?: string) => call<DailyReport>(`/api/mis/${id}/daily-report${date ? `?date=${date}` : ""}`),
-  loadDemo: () => call<{ imports: Dataset[] }>("/api/demo", { method: "POST" }),
+  loadDemo: (company = "narmada") => call<{ imports: Dataset[] }>("/api/demo", json({ company })),
+  demoCompanies: () => call<{ companies: DemoCompany[]; password: string }>("/api/demo/companies"),
+  tryDemo: (company: string, role: Role) => call<{ token: string; user: User }>("/api/demo/try", json({ company, role })),
+  overview: () => call<Overview>("/api/overview"),
+  brief: (link: string) => call<Brief>(`/api/brief?link=${encodeURIComponent(link)}`),
+  briefSettings: () => call<BriefSettings>("/api/brief/settings"),
+  saveBriefSettings: (b: { at_time: string; emails: string; phones: string; enabled: boolean }) => call<BriefSettings>("/api/brief/settings", json(b, "PUT")),
+  sendBrief: (link: string) => call<{ results: { to: string; ok: boolean; error?: string }[] }>(`/api/brief/send?link=${encodeURIComponent(link)}`, { method: "POST" }),
   schedule: (id: string) => call<Schedule>(`/api/mis/${id}/schedule`),
   setSchedule: (id: string, b: { at_time: string; which_day: string; enabled: boolean }) => call<Schedule>(`/api/mis/${id}/schedule`, json(b, "PUT")),
 };

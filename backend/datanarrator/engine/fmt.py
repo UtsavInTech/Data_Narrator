@@ -5,8 +5,9 @@ import re
 CURRENCY = os.environ.get("DN_CURRENCY", "₹")
 INDIAN = os.environ.get("DN_NUMBER_STYLE", "indian").lower() == "indian"
 MONEY_NAME = re.compile(r"revenue|sales|amount|amt|value|total|price|cost|paid|received|collected|gst|tax|"
-                        r"profit|income|expense|salary|balance|due|outstanding|turnover|fee|budget|target|mrp|rate", re.I)
-NOT_MONEY = re.compile(r"qty|quantity|units|count|items|bills|%|percent|pct|ratio|score|age|days|hours", re.I)
+                        r"profit|income|expense|salary|balance|due|outstanding|turnover|fee|budget|target|mrp|rate|freight|fare|"
+                        r"charges?|payable|receivable", re.I)
+NOT_MONEY = re.compile(r"qty|quantity|units|count|items|bills|%|percent|pct|ratio|score|\bage\b|days|hours", re.I)
 
 
 def is_money(name: str) -> bool:
@@ -53,6 +54,8 @@ def plural(word: str, n: int | None = None) -> str:
     """Plain-English plural of a column-ish name: City -> cities, Salesperson -> salespeople."""
     w = re.sub(r"\s*(id|code|no|number|name)$", "", word.strip(), flags=re.I).strip() or word.strip()
     w = w.lower()
+    if w in ("from", "to", "via", "origin", "destination") and n != 1:
+        return "places"
     if n == 1:
         return w
     if w.endswith("person"):

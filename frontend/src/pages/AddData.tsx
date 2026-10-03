@@ -2,13 +2,22 @@ import { Building2, ChevronRight, Cloud, FileSpreadsheet, Server, UploadCloud, X
 import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
-import { Button, ErrorNote, Field, inputCls, PageHeader, Panel, Row, Section } from "../components/ui";
+import { useAuth } from "../auth";
+import { Button, ErrorNote, Field, inputCls, Notice, PageHeader, Panel, Row, Section } from "../components/ui";
 import { useData } from "../state";
 
 type Mode = "cloud" | "database" | null;
 const ACCEPT = ".xlsx,.xlsm,.xls,.xlsb,.ods,.csv,.tsv,.txt,.parquet,.json,.jsonl";
 
+// Made-up companies, six months of data ending today, copied into this workspace.
+const SAMPLES = [
+  { slug: "dairy", name: "Bhavani Valley Dairy", text: "Dairy: milk collection by centre, production, distributor invoices and returns" },
+  { slug: "narmada", name: "Narmada Electricals", text: "Electricals distributor: invoices, customers, products and payments" },
+  { slug: "logistics", name: "Sahyadri Roadlines", text: "Transport: trips, fuel, vehicles and freight bills" },
+];
+
 export default function AddData() {
+  const demo = !!useAuth().user?.demo;
   const [mode, setMode] = useState<Mode>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,21 +47,19 @@ export default function AddData() {
       {!mode && (
         <>
           <Uploader busy={busy} onUpload={(f) => run(() => api.upload(f))} />
-          <Section title="Or connect a source" className="mt-10">
+          {demo && (
+            <div className="mt-6"><Notice>
+              This is a sample company: upload a file to see how it is read. Links, cloud folders and databases are turned off
+              here; in your own workspace they work as normal.
+            </Notice></div>
+          )}
+          {!demo && <Section title="Or connect a source" className="mt-10">
             <Panel className="divide-y divide-line overflow-hidden">
               <Row onClick={() => setMode("cloud")}>
                 <Cloud size={20} className="text-mute shrink-0" />
                 <span className="flex-1 min-w-0">
                   <span className="block text-[15px] font-medium">Cloud folder or link</span>
                   <span className="block text-[13px] text-mute">Google Drive & Sheets, OneDrive, SharePoint, Dropbox, Amazon S3, Google Cloud, Azure</span>
-                </span>
-                <ChevronRight size={16} className="text-faint" />
-              </Row>
-              <Row onClick={() => run(() => api.loadDemo())}>
-                <Building2 size={20} className="text-mute shrink-0" />
-                <span className="flex-1 min-w-0">
-                  <span className="block text-[15px] font-medium">Sample company</span>
-                  <span className="block text-[13px] text-mute">Narmada Electricals (fictional): 6 months of invoices, customers, products and payments, to try everything</span>
                 </span>
                 <ChevronRight size={16} className="text-faint" />
               </Row>
@@ -65,7 +72,23 @@ export default function AddData() {
                 <ChevronRight size={16} className="text-faint" />
               </Row>
             </Panel>
-          </Section>
+          </Section>}
+          {!demo && (
+            <Section title="Or try a sample company" className="mt-10">
+              <Panel className="divide-y divide-line overflow-hidden">
+                {SAMPLES.map((c) => (
+                  <Row key={c.slug} onClick={() => run(() => api.loadDemo(c.slug))}>
+                    <Building2 size={20} className="text-mute shrink-0" />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[15px] font-medium">{c.name}</span>
+                      <span className="block text-[13px] text-mute">{c.text}</span>
+                    </span>
+                    <ChevronRight size={16} className="text-faint" />
+                  </Row>
+                ))}
+              </Panel>
+            </Section>
+          )}
         </>
       )}
       {mode && (

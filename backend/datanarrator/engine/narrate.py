@@ -50,9 +50,13 @@ def _noun(table: str) -> str:
 
 def receivables(con, rel, prof, measures, ref: dt.date) -> dict | None:
     """Unpaid / overdue money, when the table has a payment-status column."""
-    status = next(((c["name"], [v for v in c["values"] if PAID.match(v.strip())])
-                   for c in by_role(prof, "dimension") if c["subtype"] == "status"), None)
-    money = _main_measure(measures)
+    # Only a status that has a "paid" value tells open from settled (a trip status doesn't).
+    status = next(((c["name"], paid) for c in by_role(prof, "dimension") if c["subtype"] == "status"
+                   for paid in [[v for v in c["values"] if PAID.match(v.strip())]] if paid), None)
+    # The amount billed: a money column, preferring one that reads as a bill or invoice total.
+    owed = [m for m in measures if m["agg"] == "sum" and is_money(m["name"]) and not PAID_AMOUNT.search(m["name"])]
+    owed.sort(key=lambda m: not re.search(r"total|bill|invoice|net|grand|payable", m["name"], re.I))
+    money = owed[0] if owed else None
     if not status or not money:
         return None
     paid_col = next((m for m in by_role(prof, "measure") if PAID_AMOUNT.search(m["name"]) and m["name"] != money["name"]), None)
@@ -152,6 +156,44 @@ def movers(con, rel, texpr: str, measure: dict, dims: list[dict], ref: dt.date) 
     return out
 
 
+def drifts(con, rel, texpr: str, measures: list[dict], dims: list[dict], ref: dt.date) -> list[dict]:
+    """Averages that moved for one group only: fat % falling at one collection centre, delays at one driver.
+    Each group's last month is compared with its own usual level (the three months before), and kept only
+    when it stands well apart from how the other groups moved."""
+    last_end = ref.replace(day=1) - dt.timedelta(days=1)
+    last_start = last_end.replace(day=1)
+    base_start = _month_shift(last_start, -3)
+    d = f"CAST({texpr} AS DATE)"
+    out = []
+    for m in [x for x in measures if x["agg"] == "avg"][:6]:
+        mq = q(m["name"])
+        for dim in [x for x in dims if 3 <= x["unique"] <= 40 and x["subtype"] != "status"][:4]:
+            rows = con.execute(f"""
+                SELECT CAST({q(dim['name'])} AS VARCHAR) g,
+                       avg({mq}) FILTER (WHERE {d} BETWEEN ? AND ?) cur_v,
+                       avg({mq}) FILTER (WHERE {d} BETWEEN ? AND ?) base_v,
+                       count({mq}) FILTER (WHERE {d} BETWEEN ? AND ?) n
+                FROM {rel} WHERE {q(dim['name'])} IS NOT NULL GROUP BY 1""",
+                               [last_start, last_end, base_start, last_start - dt.timedelta(days=1),
+                                last_start, last_end]).fetchall()
+            ch = [(g, float(c), float(b), float(c) - float(b)) for g, c, b, n in rows
+                  if c is not None and b is not None and n >= 5]
+            if len(ch) < 3:
+                continue
+            for g, c, b, diff in ch:
+                others = [x[3] for x in ch if x[0] != g]
+                mean = sum(others) / len(others)
+                spread = (sum((x - mean) ** 2 for x in others) / len(others)) ** 0.5
+                rel_move = abs(diff) / abs(b) if b else 0
+                if rel_move >= 0.05 and abs(diff - mean) > max(4 * spread, 1e-9):
+                    out.append({"measure": m["name"], "dimension": dim["name"], "group": g, "current": c,
+                                "usual": b, "change": diff / b if b else None, "month": f"{last_start:%B}",
+                                "base": f"{base_start:%B}–{(last_start - dt.timedelta(days=1)):%B}",
+                                "score": abs(diff - mean) / max(spread, 1e-9)})
+    out.sort(key=lambda x: -x["score"])
+    return out[:3]
+
+
 # ---------------------------------------------------------------- story
 
 def about(prof: dict, table: str, kpis: list[dict], span: tuple | None, measure: dict | None) -> str:
@@ -201,11 +243,12 @@ def build(con, rel: str, prof: dict, table: str, result: dict, measures: list[di
     months = (span[1] - span[0]).days / 30 if span and span[0] and span[1] else 0
     mtd = month_to_date(con, rel, texpr, main, ref) if texpr and months >= 1 else None
     last2 = last_two_months(con, rel, texpr, main, ref) if texpr and months >= 2 else None
-    recv = receivables(con, rel, prof, measures, ref)
+    recv = receivables(con, rel, prof, by_role(prof, "measure"), ref)
     moves = movers(con, rel, texpr, main, dims, ref) if texpr and main and months >= 3 else []
+    drift = drifts(con, rel, texpr, by_role(prof, "measure"), by_role(prof, "dimension"), ref) if texpr and months >= 3 else []
     facts = {"about": about(prof, table, result["kpis"], span, main), "ref_date": ref.isoformat(),
              "main_measure": main["name"] if main else None,
-             "month_to_date": mtd, "last_two_months": last2, "receivables": recv, "movers": moves}
+             "month_to_date": mtd, "last_two_months": last2, "receivables": recv, "movers": moves, "drifts": drift}
     M = lambda v, name: money_or_num(v, name)  # noqa: E731
 
     # ---- the lead: how the business is doing right now, and what is owed
@@ -295,6 +338,10 @@ def build(con, rel: str, prof: dict, table: str, result: dict, measures: list[di
 
     # ---- worth checking
     checks = []
+    for x in drift:
+        word = "fell" if x["current"] < x["usual"] else "rose"
+        checks.append(f"{x['measure']} at {x['group']} ({x['dimension']}) {word} to {num(x['current'])} in {x['month']},"
+                      f" from its usual {num(x['usual'])} ({x['base']}), while other {plural(x['dimension']).lower()} held steady.")
     for i in insights:
         if i["type"] == "breakdown" and i["facts"].get("negatives"):
             checks.append(i["details"][-1] if i.get("details") else i["summary"])
